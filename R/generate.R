@@ -1,9 +1,9 @@
 generate_featureParam <- function(fit_F, feature_params, n_feature) {
   if(fit_F$pi0_sigma2 > 0)
     sigma2_ind <- rbinom(n = n_feature, size = 1, prob = 1 - fit_F$pi0_sigma2)
-  else 
+  else
     sigma2_ind <- rep(1, length = n_feature)
-  
+
   # simulate parameters for non-zero sigma2s
   feature_paramsNonZeroSigma2 <- feature_params[feature_params[, 2] > 0, ]
   nonzeroSigma2_ind <- sigma2_ind[sigma2_ind > 0]
@@ -20,7 +20,7 @@ generate_featureParam <- function(fit_F, feature_params, n_feature) {
     nonzeroSigma2_ind <- (mat_simulatedParams[, 2] <= 0) * 1
     if(sum(nonzeroSigma2_ind) == 0) break
   }
-  
+
   nFeature_zero <- sum(sigma2_ind == 0)
   if(nFeature_zero > 0) {
     feature_paramsZeroSigma2 <- feature_params[feature_params[, 2] == 0, ]
@@ -37,7 +37,7 @@ generate_featureParam <- function(fit_F, feature_params, n_feature) {
 generate_basis <- function(feature_params, n_sample) {
   feature_params[, 3] <- exp(feature_params[, 3]) / (1 + exp(feature_params[, 3]))
   mat_basis <- sapply(1:nrow(feature_params), function(i_feature) {
-    generate_ZILogitNM(feature_params[i_feature, 1], 
+    generate_ZILogitNM(feature_params[i_feature, 1],
                        feature_params[i_feature, 2],
                        feature_params[i_feature, 3],
                        n_sample = n_sample)
@@ -45,7 +45,25 @@ generate_basis <- function(feature_params, n_sample) {
   mat_basis <- apply(mat_basis, 1, function(x) x / sum(x))
 }
 
-generate_ZILogitNM <- function(mu, sigma2, pi0, n_sample) {
+generate_ZILogitN <- function(mu, sigma2, pi0, n_sample) {
+  samples_nonzero <- rnorm(n = n_sample, mean = mu, sd = sqrt(sigma2))
+  samples_nonzero <- exp(samples_nonzero) / (1 + exp(samples_nonzero))
+  samples_ind <- rbinom(n = n_sample, size = 1, p = 1 - pi0)
+  return(samples_nonzero * samples_ind)
+}
+
+generate_spiked_basis <- function(feature_params, n_sample) {
+  feature_params[, 3] <- exp(feature_params[, 3]) / (1 + exp(feature_params[, 3]))
+  mat_basis <- sapply(1:nrow(feature_params), function(i_feature) {
+    generate_ZILogitNM(feature_params[i_feature, 1],
+                       feature_params[i_feature, 2],
+                       feature_params[i_feature, 3],
+                       n_sample = n_sample)
+  })
+  mat_basis <- apply(mat_basis, 1, function(x) x / sum(x))
+}
+
+generate_ZILogitN <- function(mu, sigma2, pi0, n_sample) {
   samples_nonzero <- rnorm(n = n_sample, mean = mu, sd = sqrt(sigma2))
   samples_nonzero <- exp(samples_nonzero) / (1 + exp(samples_nonzero))
   samples_ind <- rbinom(n = n_sample, size = 1, p = 1 - pi0)

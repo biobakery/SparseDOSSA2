@@ -1,8 +1,17 @@
 SparseDOSSA2 <- function(n_sample,
                          n_feature,
-                         feature_abd = NULL,
-                         original_features = FALSE,
-                         read_depth = 50000) {
+                         template = NULL,
+                         original_feature = FALSE,
+                         feature_feature_association = TRUE,
+                         spike_metadata = NULL,
+                         spike_strength = NULL,
+                         spike_feature = NULL,
+                         spike_discrete_bidirectional = TRUE,
+                         biomass = NULL,
+                         read_depth = 50000,
+                         seed,
+                         verbose = TRUE) {
+
   if(any(apply(feature_abd == 0, 1, all)) |
      any(apply(feature_abd == 0, 2, all))){
     warning("Feature table has all zero sample/feature (will be removed)!")

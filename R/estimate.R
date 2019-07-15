@@ -1,93 +1,103 @@
-#' Title
+#' EM algorithm estimator for per-feature parameters (prevalence, mean, variance)
 #'
-#' @param n_ij feature count of sample i feature j
-#' @param n_i total read count of sample i
-#' @param control
+#' @param y_ij vector of per-feature read count across samples
+#' @param n_i vector of total read count across samples
+#' @param control list of control parameters of EM algorithm
 #'
-#' @return
-#'
-#' @examples
-estimate_featureParams <- function(n_ij, n_i,
-                                   control = list(maxiter = 1000,
-                                                  threshold = 1e-9)) {
-  # report suspicious input
-  if(all(n_ij == 0))
+#' @return list with components for estimated parameters, hidden parameters, and optimization information
+estimate_featureParams <- function(y_ij, n_i,
+                                   control = list(maxiter.outer = 100,
+                                                  maxiter.inner = 1000,
+                                                  reltol.outer = 1e-8,
+                                                  reltol.inner = 1e-5)) {
+  # sanity check on input
+  if(all(y_ij == 0))
     stop("All feature counts are zeros!")
-  if(length(n_ij) != length(n_i))
-    stop("Length of n_ij and n_i must agree!")
+  if(length(y_ij) != length(n_i))
+    stop("Length of y_ij and n_i must agree!")
   if(any(n_i < 2))
     stop("n_i cannot be less than 2!")
 
-  # zero indicator, muhat_i, and sigma2hat_i
-  ind_zero_i <- n_ij == 0
-  muhat_i <- get_muhat_i(n_ij = n_ij, n_i = n_i)
-  sigma2hat_i <- get_sigma2hat_i(n_ij = n_ij, n_i = n_i)
+  # non-zero indicator, muhat_ij, and sigma2hat_ij
+  ind_i <- y_ij != 0
+  muhat_ij <- get_muhat_i(y_ij = y_ij, n_i = n_i)
+  sigma2hat_ij <- get_sigma2hat_i(y_ij = y_ij, n_i = n_i)
 
   # Initial values for EM
-  mu_origin <- mean(muhat_i[!ind_zero_i])
-  if(sum(!ind_zero_i) == 1) {
+  mu_origin <- mean(muhat_ij[ind_i])
+  if(sum(ind_i) == 1) {
     sigma2_origin <- 0
   } else {
-    sigma2_origin <- var(muhat_i[!ind_zero_i])
+    sigma2_origin <- var(muhat_ij[ind_i])
   }
-  pi0_origin <- mean(ind_zero_i)
-  # mu_old <- 0
-  # sigma2_old <- 1
-  # pi0_old <- 0.5
+  pi_origin <- mean(ind_i)
+
   mu_old <- mu_origin
   sigma2_old <- sigma2_origin
-  pi0_old <- pi0_origin
+  pi_old <- pi_origin
   counter <- 0
 
   # EM updates
   while(TRUE) {
     counter <- counter + 1
-    if(counter > control$maxiter) {
+    if(counter > control$maxiter.outer) {
       warning("Maximum iteration reached!")
       break
     }
 
     # E step
-    w_i <- get_w_i(muhat_i = muhat_i,
-                   sigma2hat_i = sigma2hat_i,
-                   n_ij = n_ij,
+    w_i <- get_w_i(muhat_ij = muhat_ij,
+                   sigma2hat_ij = sigma2hat_ij,
+                   y_ij = y_ij,
                    n_i = n_i,
-                   pi0 = pi0_old,
+                   pi = pi_old,
                    mu = mu_old,
                    sigma2 = sigma2_old)
 
     # M step
-    pi0_new <- update_pi0(w_i = w_i)
-    sigma2_new <- update_sigma2(muhat_i = muhat_i,
-                                sigma2hat_i = sigma2hat_i,
+    pi_new <- update_pi(w_i = w_i)
+    sigma2_new <- update_sigma2(muhat_ij = muhat_ij,
+                                sigma2hat_ij = sigma2hat_ij,
                                 w_i = w_i,
-                                sigma2_old = sigma2_old)
+                                sigma2_old = sigma2_old,
+                                control = list(maxit = control$maxiter.inner,
+                                               reltol = control$reltol.inner))
     mu_new <- update_mu(sigma2 = sigma2_new,
-                        muhat_i = muhat_i,
-                        sigma2hat_i = sigma2hat_i,
+                        muhat_ij = muhat_ij,
+                        sigma2hat_ij = sigma2hat_ij,
                         w_i = w_i)
 
-    if(all(abs(c(mu_new, sigma2_new, pi0_new) -
-               c(mu_old, sigma2_old, pi0_old)) < control$threshold)) break
+    if(sigma2_old != 0) {
+      if(all(abs((c(mu_new, sigma2_new, pi_new) -
+                  c(mu_old, sigma2_old, pi_old)) /
+                 c(mu_old, sigma2_old, pi_old)) <
+             control$reltol.outer)) break
+    } else {
+      if(all(c(abs((c(mu_new, pi_new) -
+                    c(mu_old, pi_old)) /
+                   c(mu_old, pi_old)), sigma2_new) <
+             control$reltol.outer)) break
+    }
+
     # update maximization iterations
     mu_old <- mu_new
     sigma2_old <- sigma2_new
-    pi0_old <- pi0_new
+    pi_old <- pi_new
   }
 
-  mu_posterior_i <- posterior_mu_i(muhat_i, sigma2hat_i,
+  mu_posterior_i <- posterior_mu_i(muhat_ij, sigma2hat_ij,
                                    mu_new, sigma2_new)
-  sigma2_posterior_i <- posterior_sigma2_i(sigma2hat_i, sigma2_new)
+  sigma2_posterior_i <- posterior_sigma2_i(sigma2hat_ij, sigma2_new)
 
   return(list(theta = c(mu = mu_new,
                         sigma2 = sigma2_new,
-                        pi0 = pi0_new),
+                        pi = pi_new),
               theta_original = c(mu = mu_origin,
                                  sigma2 = sigma2_origin,
-                                 pi0 = pi0_origin),
+                                 pi = pi_origin),
               hidden_param = list(w_i = w_i,
-                                  mu_sample_i = muhat_i,
-                                  sigma2_sample_i = sigma2hat_i,
+                                  mu_original_i = muhat_ij,
+                                  sigma2_original_i = sigma2hat_ij,
                                   mu_posterior_i = mu_posterior_i,
                                   sigma2_posterior_i = sigma2_posterior_i),
               niter = counter))

@@ -4,10 +4,10 @@
 \alias{estimate_F}
 \title{Non-parametric density estimator for the distribution of per-feature parameters}
 \usage{
-estimate_F(feature_params, control = list(estimator = "Hscv"))
+estimate_F(feature_param, control = list(estimator = "Hscv"))
 }
 \arguments{
-\item{feature_params}{data frame of estimated per-feature parameters (in order mu, sigma2, and pi)}
+\item{feature_param}{data frame of estimated per-feature parameters (in order mu, sigma2, and pi)}
 
 \item{control}{list of control parameters to pass on to the bandwidth estimators in ks}
 }

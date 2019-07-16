@@ -147,6 +147,11 @@ estimate_C <- function(feature_abd, seed,
                        dispstr = "un")
 }
 
+#' MLE estimator for read depth distribution
+#'
+#' @param n_i vector of total read count across samples
+#'
+#' @return estimated mean and variance parameters
 estimate_readCount <- function(n_i) {
   return(c("mu" = mean(log(n_i)),
            "sigma2" = var(log(n_i))))

@@ -12,4 +12,5 @@ LazyData: true
 RoxygenNote: 6.1.1
 Depends:
   ks,
-  copula
+  copula,
+  mvtnorm

@@ -106,23 +106,23 @@ estimate_featureParam <- function(y_ij, n_i,
 
 #' Non-parametric density estimator for the distribution of per-feature parameters
 #'
-#' @param feature_params data frame of estimated per-feature parameters (in order mu, sigma2, and pi)
+#' @param feature_param data frame of estimated per-feature parameters (in order mu, sigma2, and pi)
 #' @param control list of control parameters to pass on to the bandwidth estimators in ks
 #'
 #' @return list with components for bandwidth estimations for zero and non-zero sigma2 part, and
 #' percentage of zero sigma2s
 #' @import ks
-estimate_F <- function(feature_params, control = list(estimator = "Hscv")) {
-  if(!all(colnames(feature_params) == c("mu", "sigma2", "pi")))
-    stop("feature_params is not of the correct format!")
+estimate_F <- function(feature_param, control = list(estimator = "Hscv")) {
+  if(!all(colnames(feature_param) == c("mu", "sigma2", "pi")))
+    stop("feature_param is not of the correct format!")
   # transform pi parameter before estimation
-  feature_params[, 3] <- log(feature_params[, 3]) - log(1 - feature_params[, 3])
+  feature_param[, 3] <- log(feature_param[, 3]) - log(1 - feature_param[, 3])
 
-  ind_zero_sigma2 <- feature_params[, 2] == 0
+  ind_zero_sigma2 <- feature_param[, 2] == 0
 
-  K_nonzero <- do.call(control$estimator, list(x = feature_params[!ind_zero_sigma2, , drop = FALSE]))
+  K_nonzero <- do.call(control$estimator, list(x = feature_param[!ind_zero_sigma2, , drop = FALSE]))
   if(any(ind_zero_sigma2))
-    K_zero <- do.call(control$estimator, list(x = feature_params[ind_zero_sigma2, -2, drop = FALSE]))
+    K_zero <- do.call(control$estimator, list(x = feature_param[ind_zero_sigma2, -2, drop = FALSE]))
   else
     K_zero <- NULL
   return(list(p0_sigma2 = mean(ind_zero_sigma2),

@@ -5,11 +5,11 @@
 #' @param control list of control parameters of EM algorithm
 #'
 #' @return list with components for estimated parameters, hidden parameters, and optimization information
-estimate_featureParams <- function(y_ij, n_i,
-                                   control = list(maxiter.outer = 100,
-                                                  maxiter.inner = 1000,
-                                                  reltol.outer = 1e-8,
-                                                  reltol.inner = 1e-5)) {
+estimate_featureParam <- function(y_ij, n_i,
+                                  control = list(maxiter.outer = 100,
+                                                 maxiter.inner = 1000,
+                                                 reltol.outer = 1e-8,
+                                                 factr.inner = 1e7)) {
   # sanity check on input
   if(all(y_ij == 0))
     stop("All feature counts are zeros!")
@@ -20,8 +20,9 @@ estimate_featureParams <- function(y_ij, n_i,
 
   # non-zero indicator, muhat_ij, and sigma2hat_ij
   ind_i <- y_ij != 0
-  muhat_ij <- get_muhat_i(y_ij = y_ij, n_i = n_i)
-  sigma2hat_ij <- get_sigma2hat_i(y_ij = y_ij, n_i = n_i)
+  muhat_ij <- get_muhat_ij(y_ij = y_ij, n_i = n_i)
+  sigma2hat_ij <- get_sigma2hat_ij(y_ij = y_ij, n_i = n_i)
+  muhat_ij[!ind_i] <- muhat_ij[!ind_i] - sigma2hat_ij[!ind_i]
 
   # Initial values for EM
   mu_origin <- mean(muhat_ij[ind_i])
@@ -61,7 +62,7 @@ estimate_featureParams <- function(y_ij, n_i,
                                 w_i = w_i,
                                 sigma2_old = sigma2_old,
                                 control = list(maxit = control$maxiter.inner,
-                                               reltol = control$reltol.inner))
+                                               factr = control$factr.inner))
     mu_new <- update_mu(sigma2 = sigma2_new,
                         muhat_ij = muhat_ij,
                         sigma2hat_ij = sigma2hat_ij,
@@ -85,9 +86,9 @@ estimate_featureParams <- function(y_ij, n_i,
     pi_old <- pi_new
   }
 
-  mu_posterior_i <- posterior_mu_i(muhat_ij, sigma2hat_ij,
-                                   mu_new, sigma2_new)
-  sigma2_posterior_i <- posterior_sigma2_i(sigma2hat_ij, sigma2_new)
+  mu_posterior_ij <- posterior_mu_ij(muhat_ij, sigma2hat_ij,
+                                     mu_new, sigma2_new)
+  sigma2_posterior_ij <- posterior_sigma2_ij(sigma2hat_ij, sigma2_new)
 
   return(list(theta = c(mu = mu_new,
                         sigma2 = sigma2_new,
@@ -96,23 +97,54 @@ estimate_featureParams <- function(y_ij, n_i,
                                  sigma2 = sigma2_origin,
                                  pi = pi_origin),
               hidden_param = list(w_i = w_i,
-                                  mu_original_i = muhat_ij,
-                                  sigma2_original_i = sigma2hat_ij,
-                                  mu_posterior_i = mu_posterior_i,
-                                  sigma2_posterior_i = sigma2_posterior_i),
+                                  mu_original_ij = muhat_ij,
+                                  sigma2_original_ij = sigma2hat_ij,
+                                  mu_posterior_ij = mu_posterior_ij,
+                                  sigma2_posterior_ij = sigma2_posterior_ij),
               niter = counter))
 }
 
-estimate_F <- function(feature_params) {
-  pi0_sigma2 <- mean(feature_params[, 2] == 0)
-  K_nonzero <- ks::Hscv(x = feature_params[feature_params[, 2] > 0, ])
-  if(pi0_sigma2 > 0)
-    K_zero <- ks::Hscv(x = feature_params[feature_params[, 2] == 0, -2])
+#' Non-parametric density estimator for the distribution of per-feature parameters
+#'
+#' @param feature_params data frame of estimated per-feature parameters (in order mu, sigma2, and pi)
+#' @param control list of control parameters to pass on to the bandwidth estimators in ks
+#'
+#' @return list with components for bandwidth estimations for zero and non-zero sigma2 part, and
+#' percentage of zero sigma2s
+#' @import ks
+estimate_F <- function(feature_params, control = list(estimator = "Hscv")) {
+  if(!all(colnames(feature_params) == c("mu", "sigma2", "pi")))
+    stop("feature_params is not of the correct format!")
+  # transform pi parameter before estimation
+  feature_params[, 3] <- log(feature_params[, 3]) - log(1 - feature_params[, 3])
+
+  ind_zero_sigma2 <- feature_params[, 2] == 0
+
+  K_nonzero <- do.call(control$estimator, list(x = feature_params[!ind_zero_sigma2, , drop = FALSE]))
+  if(any(ind_zero_sigma2))
+    K_zero <- do.call(control$estimator, list(x = feature_params[ind_zero_sigma2, -2, drop = FALSE]))
   else
     K_zero <- NULL
-  return(list(pi0_sigma2 = pi0_sigma2,
+  return(list(p0_sigma2 = mean(ind_zero_sigma2),
               K_nonzero = K_nonzero,
               K_zero = K_zero))
+}
+
+#' Normal copula estimator for feature-feature association (correlation between the p_ijs)
+#'
+#' @param feature_abd feature x sample abundance table
+#' @param seed random seed (used for randomized correlation estimation)
+#' @param control additional control parameters for correlation estimation
+#'
+#' @return the estimated copula
+estimate_C <- function(feature_abd, seed,
+                       control = list(method = "spearman",
+                                      random = TRUE,
+                                      R = 50)) {
+  mat_cor <- do.call("cor2", c(list(x = t(feature_abd), seed = seed), control))
+  copula::normalCopula(param = copula::P2p(mat_cor),
+                       dim = nrow(feature_abd),
+                       dispstr = "un")
 }
 
 estimate_readCount <- function(n_i) {

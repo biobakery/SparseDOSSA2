@@ -1,24 +1,24 @@
+#' per-feature MLE variance of mu_ij (= logit p_ij) across samples by binomial model
+#' @param y_ij vector of per-feature read count across samples
+#' @param n_i vector of total read count across samples
+#'
+#' @return vector sigma2hat_ij
+get_sigma2hat_ij <- function(y_ij, n_i) {
+  y_ij <- add_ifzero(y_ij, 1)
+  phat_i <- y_ij/n_i
+  1 / (n_i * phat_i * (1 - phat_i))
+}
+
 #' per-feature MLE mean of mu_ij (= logit p_ij) across samples by binomial model
 #'
 #' @param y_ij vector of per-feature read count across samples
 #' @param n_i vector of total read count across samples
 #'
 #' @return vector muhat_ij
-get_muhat_i <- function(y_ij, n_i) {
-  y_ij <- add_ifzero(y_ij, 0.5)
+get_muhat_ij <- function(y_ij, n_i) {
+  y_ij <- add_ifzero(y_ij, 1)
   phat_i <- y_ij/n_i
-  log(phat_i) - log(1 - phat_i)
-}
-
-#' per-feature MLE variance of mu_ij (= logit p_ij) across samples by binomial model
-#' @param y_ij vector of per-feature read count across samples
-#' @param n_i vector of total read count across samples
-#'
-#' @return vector sigma2hat_ij
-get_sigma2hat_i <- function(y_ij, n_i) {
-  y_ij <- add_ifzero(y_ij, 0.5)
-  phat_i <- y_ij/n_i
-  1 / (n_i * phat_i * (1 - phat_i))
+  muhat_ij <- log(phat_i) - log(1 - phat_i)
 }
 
 #' Add a fixed value to zero counts (used for zero counts in Laplacian approximation of binomial likelihood)
@@ -150,7 +150,7 @@ dNegLogLik_sigma2 <- function(sigma2, muhat_ij, sigma2hat_ij, w_i) {
 #' @param sigma2 estimated sigma2 parameter
 #'
 #' @return posterior muhat_ij, shrinked towards mu
-posterior_mu_i <- function(muhat_ij, sigma2hat_ij, mu, sigma2) {
+posterior_mu_ij <- function(muhat_ij, sigma2hat_ij, mu, sigma2) {
   (muhat_ij * sigma2 + mu * sigma2hat_ij) / (sigma2hat_ij + sigma2)
 }
 
@@ -160,6 +160,6 @@ posterior_mu_i <- function(muhat_ij, sigma2hat_ij, mu, sigma2) {
 #' @param sigma2 estimated sigma2 parameter
 #'
 #' @return  posterior sigma2hat_ij
-posterior_sigma2_i <- function(sigma2hat_ij, sigma2) {
+posterior_sigma2_ij <- function(sigma2hat_ij, sigma2) {
   sigma2hat_ij * sigma2 / (sigma2hat_ij + sigma2)
 }

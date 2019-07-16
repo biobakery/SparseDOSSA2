@@ -1,8 +1,29 @@
+#' Sparse Data Observations for Simulating Synthetic Abundance v2
+#'
+#' @param n_sample number of samples to simulate
+#' @param n_feature number of features to simulate
+#' @param template template dataset to learn community structures from
+#' @param same_features should SparseDOSSA2 generate random feautures, or the same ones as
+#' in the template dataset?
+#' @param feature_feature_association only valid when same_feature = TRUE. Should SparseDOSSA2 additionally
+#' model the feature-feature association structure in the template dataset?
+#' @param spike_metadata
+#' @param spike_strength
+#' @param spike_feature
+#' @param spike_discrete_bidirectional
+#' @param biomass
+#' @param read_depth target median sample read depths of the simulated microbial counts
+#' @param seed random seed
+#' @param control nested list of control parameters for the various model fitting components of SparseDOSSA2
+#' @param verbose
+#'
+#' @return
+#' @export
 SparseDOSSA2 <- function(n_sample = NULL,
                          n_feature = NULL,
-                         feature_feature_association = TRUE,
                          template = NULL,
                          same_features = FALSE,
+                         feature_feature_association = FALSE,
                          spike_metadata = NULL,
                          spike_strength = NULL,
                          spike_feature = NULL,
@@ -53,24 +74,26 @@ SparseDOSSA2 <- function(n_sample = NULL,
     })
     dfFit_featureParam <- Reduce("rbind",
                                  lapply(lFit_featureParam, function(x) x$theta))
+    rownames(dfFit_featureParam) <- rownames(template)
 
     # estimate F
     if(!same_features) {
       if(verbose) message("same_features is FALSE, estimating distribution of per-feature parameters...")
       fit_F <- estimate_F(feature_param = dfFit_featureParam,
                           control = control$kd)
-    }
+    } else fit_F <- NULL
 
     # estimate correlation copula
-    if(feature_feature_association) {
-      if(verbose) message("feature_feature_association is TRUE, estimating feature-feature associations...")
+    if(same_features & feature_feature_association) {
+      if(verbose) message("Both same_features and feature_feature_association are TRUE, ",
+                          "estimating feature-feature associations...")
       mat_posterior <- Reduce("rbind", lapply(lFit_featureParam, function(x) x$hidden_param$mu_posterior_ij))
       mat_posterior <- exp(mat_posterior) / (1 + exp(mat_posterior))
       mat_posterior[template == 0] <- 0
       fit_C <- estimate_C(feature_abd = mat_posterior,
                           seed = seed,
                           control = control$copula)
-    }
+    } else fit_C <- NULL
 
     # estimate read count
     if(verbose) message("Estimating read count distribution...")
@@ -89,32 +112,42 @@ SparseDOSSA2 <- function(n_sample = NULL,
                                               feature_param = dfFit_featureParam,
                                               n_feature = n_feature,
                                               seed = seed)
+    rownames(featureParam_new) <- paste0("Feature", 1:n_feature)
   }
 
   # generate basis matrix
   if(verbose) message("Generating basis relative abundance matrix...")
-  if(!feature_feature_association) fit_C <- NULL
-  mat_basis <- generate_basis(feature_paramsNew, n_sample, fit_C, seed = seed)
+  lMat_basis <- generate_basis(feature_param = featureParam_new,
+                               n_sample = n_sample,
+                               fit_C = fit_C,
+                               seed = seed)
 
 
-  if(!is.null(spike_metadata)) {
+  # if(!is.null(spike_metadata)) {
+  #
+  # }
 
-  }
-
-
-
-  # fit_EMFeatureParams[, 3] <- log(fit_EMFeatureParams[, 3]) - log(1 - fit_EMFeatureParams[, 3])
-
-
-
-
-
-
+  if(verbose) message("Generating count matrix...")
   # generate read depth
-  readDepth_new <- generate_readDepth(fit_readCount, n_sample, read_depth)
-
+  readDepth_new <- generate_readDepth(mu = fit_readCount["mu"],
+                                      sigma2 = fit_readCount["sigma2"],
+                                      n_sample = n_sample,
+                                      read_depth = read_depth,
+                                      seed = seed)
   # generate read counts
-  mat_count <- generate_readCount(mat_basis, readDepth_new)
+  mat_count <- generate_readCount(mat_p = lMat_basis$mat_basis,
+                                  n_i = readDepth_new,
+                                  seed = seed)
 
-  return(mat_count)
+  # aggregate results
+  results <- list(counts = mat_count,
+                  template_fits = list(em = lFit_featureParam,
+                                       kd = fit_F,
+                                       copula = fit_C,
+                                       depth = fit_readCount),
+                  hidden_params = list(feature_param = featureParam_new,
+                                       mats_basis = lMat_basis),
+                  control = control)
+
+  return(results)
 }

@@ -5,6 +5,7 @@
 #' @return vector sigma2hat_ij
 get_sigma2hat_ij <- function(y_ij, n_i) {
   y_ij <- add_ifzero(y_ij, 1)
+  y_ij <- subtract_ifmax(y_ij, n_i, 1)
   phat_i <- y_ij/n_i
   1 / (n_i * phat_i * (1 - phat_i))
 }
@@ -17,6 +18,7 @@ get_sigma2hat_ij <- function(y_ij, n_i) {
 #' @return vector muhat_ij
 get_muhat_ij <- function(y_ij, n_i) {
   y_ij <- add_ifzero(y_ij, 1)
+  y_ij <- subtract_ifmax(y_ij, n_i, 1)
   phat_i <- y_ij/n_i
   muhat_ij <- log(phat_i) - log(1 - phat_i)
 }
@@ -32,6 +34,16 @@ add_ifzero <- function(y_ij, value) {
   y_ij
 }
 
+#' Subtract a fixed value from max counts
+#'
+#' @param y_ij vector of per-feature read count across samples
+#'
+#' @return modified counts
+subtract_ifmax <- function(y_ij, n_i, value) {
+  ind_max <- y_ij == n_i
+  y_ij[ind_max] <- y_ij[ind_max] - value
+  y_ij
+}
 
 #' E step update for the per sample weights of prevalence parameter
 #'

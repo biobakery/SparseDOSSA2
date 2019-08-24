@@ -124,7 +124,7 @@ SparseDOSSA2 <- function(n_sample = NULL,
 
 
   # if(!is.null(spike_metadata)) {
-  #
+  #w
   # }
 
   if(verbose) message("Generating count matrix...")

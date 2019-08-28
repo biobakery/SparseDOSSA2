@@ -5,11 +5,10 @@
 #' @param method method used for correlation estimation. Only "spearman" and "kendall" are supported.
 #' @param random if randomization should be performed in order to break ties
 #' @param R number of random iterations to perform
-#' @param seed random seed
 #'
 #' @return estimated correlation matrix
 cor2 <- function(x, y = x, method = "spearman",
-                 random = FALSE, R = 30, seed) {
+                 random = FALSE, R = 30) {
   if(nrow(x) != nrow(y))
     stop("Number of rows between x and y must agree!")
   if(!(all(x >= 0) & all(y >= 0)))
@@ -24,8 +23,6 @@ cor2 <- function(x, y = x, method = "spearman",
 
   # If randomize then replace zeros with randomized small values
   if(random) {
-    set.seed(seed)
-
     ind_x <- x != 0
     ind_y <- y != 0
     minMeasure_x <- min(setdiff(abs(x), 0)) / 2

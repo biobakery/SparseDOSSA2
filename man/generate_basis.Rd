@@ -4,7 +4,7 @@
 \alias{generate_basis}
 \title{Generate basis (i.e., pij) matrix, with the option to incorporate copula shuffling for correlation structure}
 \usage{
-generate_basis(feature_param, n_sample, fit_C = NULL, seed)
+generate_basis(feature_param, n_sample, fit_C = NULL)
 }
 \arguments{
 \item{feature_param}{data frame/matrix of generated (if same_features = FALSE) or estimated
@@ -13,8 +13,6 @@ generate_basis(feature_param, n_sample, fit_C = NULL, seed)
 \item{n_sample}{number of samples to generate}
 
 \item{fit_C}{a copula fit (fit generated from estimate_C). If null then no shuffling will be performed.}
-
-\item{seed}{random seed}
 }
 \value{
 a list of matrices, in order:

@@ -4,7 +4,7 @@
 \alias{cor2}
 \title{correlation estimation with randomized option to break ties}
 \usage{
-cor2(x, y = x, method = "spearman", random = FALSE, R = 30, seed)
+cor2(x, y = x, method = "spearman", random = FALSE, R = 30)
 }
 \arguments{
 \item{x}{numeric matrix x}
@@ -16,8 +16,6 @@ cor2(x, y = x, method = "spearman", random = FALSE, R = 30, seed)
 \item{random}{if randomization should be performed in order to break ties}
 
 \item{R}{number of random iterations to perform}
-
-\item{seed}{random seed}
 }
 \value{
 estimated correlation matrix

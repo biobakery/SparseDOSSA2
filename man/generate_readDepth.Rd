@@ -4,7 +4,7 @@
 \alias{generate_readDepth}
 \title{Generate log-normal per-sample read counts}
 \usage{
-generate_readDepth(mu, sigma2, n_sample, read_depth, seed)
+generate_readDepth(mu, sigma2, n_sample, read_depth)
 }
 \arguments{
 \item{mu}{mean parameter}
@@ -14,8 +14,6 @@ generate_readDepth(mu, sigma2, n_sample, read_depth, seed)
 \item{n_sample}{number of samples to generate}
 
 \item{read_depth}{median read depth to normalize to}
-
-\item{seed}{random seed}
 }
 \value{
 vector of total read depths

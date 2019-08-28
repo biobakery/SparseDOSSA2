@@ -4,7 +4,7 @@
 \alias{generate_readCount}
 \title{Generate multinomial sampled read counts matrix}
 \usage{
-generate_readCount(mat_p, n_i, seed)
+generate_readCount(mat_p, n_i)
 }
 \arguments{
 \item{mat_p}{feature x sample matrix of underlying relative abundance}

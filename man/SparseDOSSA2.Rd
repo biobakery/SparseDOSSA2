@@ -8,10 +8,10 @@ SparseDOSSA2(n_sample = NULL, n_feature = NULL, template = NULL,
   same_features = FALSE, feature_feature_association = FALSE,
   spike_metadata = NULL, spike_strength = NULL, spike_feature = NULL,
   spike_discrete_bidirectional = TRUE, biomass = NULL,
-  read_depth = 50000, seed, control = list(em = list(maxiter.outer =
-  1000, maxiter.inner = 1000, reltol.outer = 1e-08, factr.inner = 1e+07),
-  kd = list(estimator = "Hscv"), copula = list(method = "spearman", random
-  = TRUE, R = 50)), verbose = TRUE)
+  read_depth = 50000, control = list(em = list(maxiter.outer = 1000,
+  maxiter.inner = 1000, reltol.outer = 1e-08, factr.inner = 1e+07), kd =
+  list(estimator = "Hscv"), copula = list(method = "spearman", random =
+  TRUE, R = 50)), verbose = TRUE)
 }
 \arguments{
 \item{n_sample}{number of samples to simulate}
@@ -27,8 +27,6 @@ in the template dataset?}
 model the feature-feature association structure in the template dataset?}
 
 \item{read_depth}{target median sample read depths of the simulated microbial counts}
-
-\item{seed}{random seed}
 
 \item{control}{nested list of control parameters for the various model fitting components of SparseDOSSA2}
 

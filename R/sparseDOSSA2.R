@@ -13,7 +13,6 @@
 #' @param spike_discrete_bidirectional
 #' @param biomass
 #' @param read_depth target median sample read depths of the simulated microbial counts
-#' @param seed random seed
 #' @param control nested list of control parameters for the various model fitting components of SparseDOSSA2
 #' @param verbose
 #'
@@ -30,7 +29,6 @@ SparseDOSSA2 <- function(n_sample = NULL,
                          spike_discrete_bidirectional = TRUE,
                          biomass = NULL,
                          read_depth = 50000,
-                         seed,
                          control = list(em = list(maxiter.outer = 1000,
                                                   maxiter.inner = 1000,
                                                   reltol.outer = 1e-8,
@@ -43,8 +41,6 @@ SparseDOSSA2 <- function(n_sample = NULL,
   # parameter checking
 
   # set controls if specified
-
-  set.seed(seed)
 
   # estimate feature parameters from template if provided
   if(!is.null(template)) {
@@ -91,7 +87,6 @@ SparseDOSSA2 <- function(n_sample = NULL,
       mat_posterior <- exp(mat_posterior) / (1 + exp(mat_posterior))
       mat_posterior[template == 0] <- 0
       fit_C <- estimate_C(feature_abd = mat_posterior,
-                          seed = seed,
                           control = control$copula)
     } else fit_C <- NULL
 
@@ -110,8 +105,7 @@ SparseDOSSA2 <- function(n_sample = NULL,
   else {
     featureParam_new <- generate_featureParam(fit_F = fit_F,
                                               feature_param = dfFit_featureParam,
-                                              n_feature = n_feature,
-                                              seed = seed)
+                                              n_feature = n_feature)
     rownames(featureParam_new) <- paste0("Feature", 1:n_feature)
   }
 
@@ -119,8 +113,7 @@ SparseDOSSA2 <- function(n_sample = NULL,
   if(verbose) message("Generating basis relative abundance matrix...")
   lMat_basis <- generate_basis(feature_param = featureParam_new,
                                n_sample = n_sample,
-                               fit_C = fit_C,
-                               seed = seed)
+                               fit_C = fit_C)
 
 
   # if(!is.null(spike_metadata)) {
@@ -132,12 +125,10 @@ SparseDOSSA2 <- function(n_sample = NULL,
   readDepth_new <- generate_readDepth(mu = fit_readCount["mu"],
                                       sigma2 = fit_readCount["sigma2"],
                                       n_sample = n_sample,
-                                      read_depth = read_depth,
-                                      seed = seed)
+                                      read_depth = read_depth)
   # generate read counts
   mat_count <- generate_readCount(mat_p = lMat_basis$mat_basis,
-                                  n_i = readDepth_new,
-                                  seed = seed)
+                                  n_i = readDepth_new)
 
   # aggregate results
   results <- list(counts = mat_count,

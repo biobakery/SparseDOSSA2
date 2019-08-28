@@ -133,15 +133,14 @@ estimate_F <- function(feature_param, control = list(estimator = "Hscv")) {
 #' Normal copula estimator for feature-feature association (correlation between the p_ijs)
 #'
 #' @param feature_abd feature x sample abundance table
-#' @param seed random seed (used for randomized correlation estimation)
 #' @param control additional control parameters for correlation estimation
 #'
 #' @return the estimated copula
-estimate_C <- function(feature_abd, seed,
+estimate_C <- function(feature_abd,
                        control = list(method = "spearman",
                                       random = TRUE,
                                       R = 50)) {
-  mat_cor <- do.call("cor2", c(list(x = t(feature_abd), seed = seed), control))
+  mat_cor <- do.call("cor2", c(list(x = t(feature_abd)), control))
   copula::normalCopula(param = copula::P2p(mat_cor),
                        dim = nrow(feature_abd),
                        dispstr = "un")

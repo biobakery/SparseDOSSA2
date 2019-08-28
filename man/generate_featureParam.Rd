@@ -4,7 +4,7 @@
 \alias{generate_featureParam}
 \title{Generate per-feature parameters (mu, sigma, pi) given pre-fit non-parameter density kernels}
 \usage{
-generate_featureParam(fit_F, feature_param, n_feature, seed)
+generate_featureParam(fit_F, feature_param, n_feature)
 }
 \arguments{
 \item{fit_F}{a list (fit generated fro estimate_F)}
@@ -12,8 +12,6 @@ generate_featureParam(fit_F, feature_param, n_feature, seed)
 \item{feature_param}{data frame of estimated per-feature parameters (in order mu, sigma2, and pi)}
 
 \item{n_feature}{number of features to generate}
-
-\item{seed}{random seed}
 }
 \value{
 matrix of per-feature parameters (in order mu, sigma2, and pi)

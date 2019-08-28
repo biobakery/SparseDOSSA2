@@ -4,13 +4,11 @@
 \alias{estimate_C}
 \title{Normal copula estimator for feature-feature association (correlation between the p_ijs)}
 \usage{
-estimate_C(feature_abd, seed, control = list(method = "spearman", random
-  = TRUE, R = 50))
+estimate_C(feature_abd, control = list(method = "spearman", random =
+  TRUE, R = 50))
 }
 \arguments{
 \item{feature_abd}{feature x sample abundance table}
-
-\item{seed}{random seed (used for randomized correlation estimation)}
 
 \item{control}{additional control parameters for correlation estimation}
 }

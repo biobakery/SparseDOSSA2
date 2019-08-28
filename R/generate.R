@@ -3,11 +3,9 @@
 #' @param fit_F a list (fit generated fro estimate_F)
 #' @param feature_param data frame of estimated per-feature parameters (in order mu, sigma2, and pi)
 #' @param n_feature number of features to generate
-#' @param seed random seed
 #'
 #' @return matrix of per-feature parameters (in order mu, sigma2, and pi)
-generate_featureParam <- function(fit_F, feature_param, n_feature, seed) {
-  set.seed(seed)
+generate_featureParam <- function(fit_F, feature_param, n_feature) {
 
   if(!all(names(fit_F) == c("p0_sigma2", "K_nonzero", "K_zero")))
     stop("fit_F is not of the correct format!")
@@ -59,15 +57,12 @@ generate_featureParam <- function(fit_F, feature_param, n_feature, seed) {
 #' (if same_feature = TRUE) per-feature parameters (in order mu, sigma2, and pi)
 #' @param n_sample number of samples to generate
 #' @param fit_C a copula fit (fit generated from estimate_C). If null then no shuffling will be performed.
-#' @param seed random seed
 #'
 #' @return a list of matrices, in order:
 #' mat_basis_original is the originally generated matrix
 #' mat_basis_shuffled is the copula shuffled matrix (is equal to mat_basis_original if fit_C is null)
 #' mat_basis is the normalized basis matrix for proper multinomial sampling
-generate_basis <- function(feature_param, n_sample, fit_C = NULL,
-                           seed) {
-  set.seed(seed)
+generate_basis <- function(feature_param, n_sample, fit_C = NULL) {
 
   # keep sampling until no samples have all-zero values
   ind_sample_tosimulate <- rep(TRUE, n_sample)
@@ -149,11 +144,9 @@ generate_ZILogitN <- function(mu, sigma2, pi, n_sample) {
 #' @param sigma2 variance parameter
 #' @param n_sample number of samples to generate
 #' @param read_depth median read depth to normalize to
-#' @param seed random seed
 #'
 #' @return vector of total read depths
-generate_readDepth <- function(mu, sigma2, n_sample, read_depth, seed) {
-  set.seed(seed)
+generate_readDepth <- function(mu, sigma2, n_sample, read_depth) {
   samples <- exp(rnorm(n = n_sample, mean = mu, sd = sqrt(sigma2)))
   samples <- round(samples / median(samples) * read_depth)
   return(samples)
@@ -165,8 +158,7 @@ generate_readDepth <- function(mu, sigma2, n_sample, read_depth, seed) {
 #' @param n_i vector of total read count across samples
 #'
 #' @return feature x sample matrix of microbial read count
-generate_readCount <- function(mat_p, n_i, seed) {
-  set.seed(seed)
+generate_readCount <- function(mat_p, n_i) {
   mat_count <- sapply(1:length(n_i), function(i_sample) {
     rmultinom(n = 1, size = n_i[i_sample], prob = mat_p[, i_sample])
   })

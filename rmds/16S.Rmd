@@ -1,0 +1,468 @@
+---
+title: "Model testing with 16S data"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+```{r setup, include=FALSE}
+rm(list = ls())
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+library(magrittr)
+library(ggplot2)
+```
+```{r source functions, include=FALSE}
+source("../ibd_paper/functions/phyloseq_helpers.R")
+source("../ibd_paper/functions/setup.R")
+source("functions/helpers.R")
+source("functions/EM_theta.R")
+set_ggplot()
+```
+```{r load data}
+phylo_jansson <- phyloseq::import_biom("../ibd_meta_analysis/processed/jansson_twins_ibd/16s/all_samples_taxonomy_closed_reference.biom")
+df_metadata_jansson <- read.table("../ibd_meta_analysis/processed/jansson_twins_ibd/metadata/metadata.txt", header = TRUE, check.names = FALSE, stringsAsFactors = FALSE, sep = "\t")
+rownames(df_metadata_jansson) <- df_metadata_jansson$sample_accession_16S
+samples_common <- intersect(rownames(df_metadata_jansson), 
+                            phyloseq::sample_names(phylo_jansson))
+phylo_jansson <- phyloseq::phyloseq(
+  phyloseq::otu_table(phylo_jansson)[, samples_common],
+  phyloseq::sample_data(df_metadata_jansson[samples_common, ]),
+  phyloseq::tax_table(phylo_jansson))
+phyloseq::sample_data(phylo_jansson)$read_depth <- 
+  apply(phyloseq::otu_table(phylo_jansson), 2, sum)
+```
+
+```{r filtering}
+phylo_jansson <- phylo_jansson %>% 
+  phyloseq::subset_samples(read_depth > 2)
+phylo_jansson <- phylo_jansson %>% 
+  prune_taxaSamples()
+```
+
+```{r study individual features}
+dir_output <- "results/16S/jansson/"
+dir_outputFig <- paste0(dir_output, "figures/")
+tax_table <- tax_table2(phylo_jansson)
+tax_names <- makeBetterTaxaNames(tax_table[, "Rank4"],
+                                     tax_table[, "Rank5"],
+                                     tax_table[, "Rank6"],
+                                     tax_table[, "Rank7"])
+names(tax_names) <- rownames(tax_table)
+dir.create(dir_outputFig, recursive = TRUE, showWarnings = FALSE)
+n_i <- sample_data2(phylo_jansson)$read_depth
+doParallel::registerDoParallel(cores = 6)
+l_results <- foreach::`%dopar%`(
+  foreach::foreach(i_feature = phyloseq::taxa_names(phylo_jansson)), 
+  {
+    i_feature_simple <- paste0(tax_names[i_feature],
+                               " (", i_feature, ")")
+    y_i <- otu_table2(phylo_jansson)[i_feature, ]
+    i_fit <- EM_theta(y_i = y_i, n_i = n_i)
+    
+    # visualize
+    df_plot <- data.frame(read_depth = n_i, is_zero = y_i == 0)
+    
+    # Biological vs. sequencing zeros
+    # Create zero (biological vs. sequencing) probabilities
+    df_plot_zeroDecomp <- df_plot %>% 
+      dplyr::mutate(`Sequencing zero` = i_fit$hidden_param$w_i,
+                    `Biological zero` = 1 - `Sequencing zero`) 
+    # Formatting data
+    df_plot_zeroDecomp <- df_plot_zeroDecomp %>% 
+      dplyr::filter(is_zero) %>% 
+      tidyr::gather(key = "Type of zero",
+                    value = "Probability",
+                    `Sequencing zero`, `Biological zero`)
+    df_plot_zeroDecomp <- df_plot_zeroDecomp %>% 
+      dplyr::filter(is_zero) %>% 
+      dplyr::mutate(
+        `Type of zero` = factor(`Type of zero`, 
+                                levels = c("Sequencing zero", "Biological zero"))) %>% 
+      # to prevent duplicate read_depth from affecting plotting
+      dplyr::group_by(read_depth, `Type of zero`) %>% 
+      dplyr::mutate(read_depth_factor = read_depth + (0:(dplyr::n() - 1))*0.01) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::arrange(read_depth_factor) %>% 
+      dplyr::mutate(read_depth_factor = factor(read_depth_factor,
+                                               levels = unique(read_depth_factor)))
+    p_zeroDecomp <- df_plot_zeroDecomp %>% 
+      dplyr::filter(`Type of zero` == "Biological zero") %>% 
+      ggplot(aes(x = read_depth,
+                 y = Probability)) +
+      scale_x_continuous(trans = "log10") +
+      geom_point() +
+      xlab("Effective read depth") + ylab("P(0 is biological)")
+    
+    # sample vs. posterior relative abundance estimates
+    df_plot_ra <- rbind(
+      df_plot %>% 
+        dplyr::mutate(`RA` = i_fit$hidden_param$mu_sample_i,
+                      `sd` = sqrt(i_fit$hidden_param$sigma2_sample_i),
+                      Estimation = "Sample"),
+      df_plot %>% 
+        dplyr::mutate(`RA` = i_fit$hidden_param$mu_posterior_i,
+                      `sd` = sqrt(i_fit$hidden_param$sigma2_posterior_i),
+                      Estimation = "Posterior")
+    )
+    df_plot_ra <- df_plot_ra %>% 
+      dplyr::filter(!is_zero) %>% 
+      dplyr::mutate(Estimation = factor(Estimation, 
+                                        levels = c("Sample", "Posterior"))) %>% 
+      # to prevent duplicate read_depth from affecting plotting
+      dplyr::group_by(read_depth, Estimation) %>% 
+      dplyr::mutate(read_depth_factor = read_depth + (0:(dplyr::n() - 1))*0.01) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::arrange(read_depth_factor) %>% 
+      dplyr::mutate(read_depth_factor = factor(read_depth_factor,
+                                               levels = unique(read_depth_factor)))
+    width_reference <- (max(log10(df_plot_ra$read_depth)) - 
+                          min(log10(df_plot_ra$read_depth))) / 50
+    p_ra <- df_plot_ra %>% 
+      ggplot(aes(x = read_depth,
+                 y = RA,
+                 color = Estimation)) +
+      geom_point(position = position_dodge(width = width_reference),
+                 size = 2) +
+      geom_errorbar(aes(ymax = RA + sd,
+                        ymin = RA - sd),
+                    width = width_reference,
+                    position = position_dodge(width = width_reference)) +
+      scale_x_continuous(trans = "log10") +
+      scale_color_manual(values = c("Sample" = "black",
+                                    "Posterior" = "red")) +
+      geom_hline(yintercept = i_fit$theta["mu"],
+                 linetype = "dashed") +
+      xlab("Effective read depth") + ylab("Logit(relative abundance)") +
+      theme(legend.position = c(0, 0),
+            legend.justification = c(0, 0),
+            legend.background = element_blank())
+    
+    label <- i_feature_simple %>% 
+      paste0("\nPrevalence = ", round(mean(y_i != 0), digits = 4)) %>% 
+      paste0("\nMean abundance = ", 
+             format(exp(i_fit$theta_original["mu"]) / (1 + exp(i_fit$theta_original["mu"])),
+                    type = "e",
+                    digits = 4))
+    label_fake <- paste0("\n\n")
+    p_print <- cowplot::plot_grid(p_zeroDecomp + ggtitle(label),
+                                  p_ra + ggtitle(label_fake),
+                                  nrow = 1)
+    i_feature_simple %>% 
+      paste0(dir_outputFig, ., ".pdf") %>% 
+      ggsave(plot = p_print, width = 12, height = 7)
+    i_fit$feature <- i_feature_simple
+    return(i_fit)
+  }
+)
+doParallel::stopImplicitCluster()
+# summarise feature level information
+tb_results <- tibble::tibble(
+  feature = l_results %>% purrr::map_chr("feature"),
+  pi0_sample = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta_original") %>% 
+                     extract("pi0")),
+  pi0 = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta") %>% 
+                     extract("pi0")),
+  mu_sample = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta_original") %>% 
+                     extract("mu")),
+  mu = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta") %>% 
+                     extract("mu")),
+  sigma2_sample = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta_original") %>% 
+                     extract("sigma2")),
+  sigma2 = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta") %>% 
+                     extract("sigma2")),
+  niter = l_results %>% 
+    purrr::map_dbl("niter"),
+  min_w = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("hidden_param") %>% 
+                     extract2("w_i") %>% 
+                     min())
+  )
+# plots
+boxplot(abs(tb_results$pi0 - tb_results$pi0_sample))
+p_pi0 <- tb_results %>% 
+  ggplot(aes(x = 1 - pi0, y = 1-  pi0_sample)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  ggrepel::geom_label_repel(aes(label = 
+                                  ifelse(abs(pi0 - pi0_sample) > 0.14,
+                                         feature,
+                                         NA_character_)),
+                           min.segment.length = 0) +
+  ylab("prevalence (naive)") + xlab("prevalence (model)")
+boxplot(abs(tb_results$mu - tb_results$mu_sample))
+p_mu <- tb_results %>% 
+  ggplot(aes(x = mu, y = mu_sample)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  ggrepel::geom_label_repel(aes(label = 
+                                  ifelse(abs(mu - mu_sample) > 0.5,
+                                         feature,
+                                         NA_character_)),
+                           min.segment.length = 0) +
+  xlab("logit relative abundance (model)") +
+  ylab("logit relative abundance (naive)")
+boxplot(abs(tb_results$sigma2 - tb_results$sigma2_sample) / tb_results$sigma2)
+p_sigma2 <- tb_results %>% 
+  dplyr::filter(sigma2 > 0) %>% 
+  ggplot(aes(x = 1 - pi0, y = (sigma2_sample - sigma2) / sigma2)) + 
+  geom_point() +
+  geom_hline(yintercept = 0) +
+  ggrepel::geom_label_repel(aes(label = 
+                                  ifelse(abs((sigma2 - sigma2_sample) / 
+                                               sigma2) > 15,
+                                         feature,
+                                         NA_character_)),
+                           min.segment.length = 0) +
+  xlab("prevalence") + ylab("relative change in sigma2")
+p_muVsPi <- tb_results %>% 
+  dplyr::arrange(-mu) %>% 
+  dplyr::mutate(is_extreme_mu = (1:dplyr::n()) %in% 1:3) %>% 
+  dplyr::arrange(pi0) %>% 
+  dplyr::mutate(is_low_pi0 = (1:dplyr::n()) %in% 1:2) %>% 
+  dplyr::arrange(-pi0) %>% 
+  dplyr::mutate(is_high_pi0 = (1:dplyr::n()) %in% 1:2) %>% 
+  ggplot(aes(x = mu, y = log(1-pi0) - log(pi0))) +
+  geom_point() +
+  ggrepel::geom_text_repel(aes(label = 
+                                  ifelse(is_extreme_mu | is_low_pi0 | is_high_pi0 |
+                                           feature == "Prevotella_copri",
+                                         feature,
+                                         NA_character_)),
+                           min.segment.length = 0) +
+  xlab("logit(relative abundance)") + ylab("logit(prevalence)")
+ggsave(paste0(dir_output, "pi0.pdf"), p_pi0, width = 6, height = 6)
+ggsave(paste0(dir_output, "mu.pdf"), p_mu, width = 6, height = 6)
+ggsave(paste0(dir_output, "sigma2.pdf"), p_sigma2, width = 6, height = 6)
+ggsave(paste0(dir_output, "muVsPi.pdf"), p_muVsPi, width = 6, height = 6)
+```
+
+```{r load Pouchitis}
+load("../ibd_paper/data/phyloseq/species_prefilter.RData")
+phylo_pouchitis <- phyloseq::subset_samples(phylo_species_prefilter,
+                                            dataset_name == "Pouchitis")
+phylo_pouchitis <- phylo_pouchitis %>% 
+  phyloseq::subset_samples(read_depth > 2)
+phylo_pouchitis <- phylo_pouchitis %>% 
+  prune_taxaSamples()
+```
+
+```{r study pouchitis}
+dir_output <- "results/16S/pouchitis/"
+dir_outputFig <- paste0(dir_output, "figures/")
+tax_table <- tax_table2(phylo_pouchitis)
+tax_names <- makeBetterTaxaNames(tax_table[, "Rank4"],
+                                     tax_table[, "Rank5"],
+                                     tax_table[, "Rank6"],
+                                     tax_table[, "Rank7"])
+names(tax_names) <- rownames(tax_table)
+dir.create(dir_outputFig, recursive = TRUE, showWarnings = FALSE)
+n_i <- sample_data2(phylo_pouchitis)$read_depth
+doParallel::registerDoParallel(cores = 6)
+l_results <- foreach::`%dopar%`(
+  foreach::foreach(i_feature = phyloseq::taxa_names(phylo_pouchitis)), 
+  {
+    i_feature_simple <- tax_names[i_feature]
+    y_i <- otu_table2(phylo_pouchitis)[i_feature, ]
+    i_fit <- EM_theta(y_i = y_i, n_i = n_i)
+    
+    # visualize
+    df_plot <- data.frame(read_depth = n_i, is_zero = y_i == 0)
+    
+    # Biological vs. sequencing zeros
+    # Create zero (biological vs. sequencing) probabilities
+    df_plot_zeroDecomp <- df_plot %>% 
+      dplyr::mutate(`Sequencing zero` = i_fit$hidden_param$w_i,
+                    `Biological zero` = 1 - `Sequencing zero`) 
+    # Formatting data
+    df_plot_zeroDecomp <- df_plot_zeroDecomp %>% 
+      dplyr::filter(is_zero) %>% 
+      tidyr::gather(key = "Type of zero",
+                    value = "Probability",
+                    `Sequencing zero`, `Biological zero`)
+    df_plot_zeroDecomp <- df_plot_zeroDecomp %>% 
+      dplyr::filter(is_zero) %>% 
+      dplyr::mutate(
+        `Type of zero` = factor(`Type of zero`, 
+                                levels = c("Sequencing zero", "Biological zero"))) %>% 
+      # to prevent duplicate read_depth from affecting plotting
+      dplyr::group_by(read_depth, `Type of zero`) %>% 
+      dplyr::mutate(read_depth_factor = read_depth + (0:(dplyr::n() - 1))*0.01) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::arrange(read_depth_factor) %>% 
+      dplyr::mutate(read_depth_factor = factor(read_depth_factor,
+                                               levels = unique(read_depth_factor)))
+    p_zeroDecomp <- df_plot_zeroDecomp %>% 
+      dplyr::filter(`Type of zero` == "Biological zero") %>% 
+      ggplot(aes(x = read_depth,
+                 y = Probability)) +
+      scale_x_continuous(trans = "log10") +
+      geom_point() +
+      xlab("Effective read depth") + ylab("P(0 is biological)")
+    
+    # sample vs. posterior relative abundance estimates
+    df_plot_ra <- rbind(
+      df_plot %>% 
+        dplyr::mutate(`RA` = i_fit$hidden_param$mu_sample_i,
+                      `sd` = sqrt(i_fit$hidden_param$sigma2_sample_i),
+                      Estimation = "Sample"),
+      df_plot %>% 
+        dplyr::mutate(`RA` = i_fit$hidden_param$mu_posterior_i,
+                      `sd` = sqrt(i_fit$hidden_param$sigma2_posterior_i),
+                      Estimation = "Posterior")
+    )
+    df_plot_ra <- df_plot_ra %>% 
+      dplyr::filter(!is_zero) %>% 
+      dplyr::mutate(Estimation = factor(Estimation, 
+                                        levels = c("Sample", "Posterior"))) %>% 
+      # to prevent duplicate read_depth from affecting plotting
+      dplyr::group_by(read_depth, Estimation) %>% 
+      dplyr::mutate(read_depth_factor = read_depth + (0:(dplyr::n() - 1))*0.01) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::arrange(read_depth_factor) %>% 
+      dplyr::mutate(read_depth_factor = factor(read_depth_factor,
+                                               levels = unique(read_depth_factor)))
+    width_reference <- (max(log10(df_plot_ra$read_depth)) - 
+                          min(log10(df_plot_ra$read_depth))) / 50
+    p_ra <- df_plot_ra %>% 
+      ggplot(aes(x = read_depth,
+                 y = RA,
+                 color = Estimation)) +
+      geom_point(position = position_dodge(width = width_reference),
+                 size = 2) +
+      geom_errorbar(aes(ymax = RA + sd,
+                        ymin = RA - sd),
+                    width = width_reference,
+                    position = position_dodge(width = width_reference)) +
+      scale_x_continuous(trans = "log10") +
+      scale_color_manual(values = c("Sample" = "black",
+                                    "Posterior" = "red")) +
+      geom_hline(yintercept = i_fit$theta["mu"],
+                 linetype = "dashed") +
+      xlab("Effective read depth") + ylab("Logit(relative abundance)") +
+      theme(legend.position = c(0, 0),
+            legend.justification = c(0, 0),
+            legend.background = element_blank())
+    
+    label <- i_feature_simple %>% 
+      paste0("\nPrevalence = ", round(mean(y_i != 0), digits = 4)) %>% 
+      paste0("\nMean abundance = ", 
+             format(exp(i_fit$theta_original["mu"]) / (1 + exp(i_fit$theta_original["mu"])),
+                    type = "e",
+                    digits = 4))
+    label_fake <- paste0("\n\n")
+    p_print <- cowplot::plot_grid(p_zeroDecomp + ggtitle(label),
+                                  p_ra + ggtitle(label_fake),
+                                  nrow = 1)
+    i_feature %>% 
+      paste0(dir_outputFig, ., ".pdf") %>% 
+      ggsave(plot = p_print, width = 12, height = 7)
+    i_fit$feature <- i_feature_simple
+    return(i_fit)
+  }
+)
+doParallel::stopImplicitCluster()
+# summarise feature level information
+tb_results <- tibble::tibble(
+  feature = l_results %>% purrr::map_chr("feature"),
+  pi0_sample = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta_original") %>% 
+                     extract("pi0")),
+  pi0 = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta") %>% 
+                     extract("pi0")),
+  mu_sample = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta_original") %>% 
+                     extract("mu")),
+  mu = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta") %>% 
+                     extract("mu")),
+  sigma2_sample = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta_original") %>% 
+                     extract("sigma2")),
+  sigma2 = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("theta") %>% 
+                     extract("sigma2")),
+  niter = l_results %>% 
+    purrr::map_dbl("niter"),
+  min_w = l_results %>% 
+    purrr::map_dbl(~ .x %>% 
+                     extract2("hidden_param") %>% 
+                     extract2("w_i") %>% 
+                     min())
+  )
+# plots
+boxplot(abs(tb_results$pi0 - tb_results$pi0_sample))
+p_pi0 <- tb_results %>% 
+  ggplot(aes(x = 1 - pi0, y = 1-  pi0_sample)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  ggrepel::geom_label_repel(aes(label = 
+                                  ifelse(abs(pi0 - pi0_sample) > 0.08,
+                                         feature,
+                                         NA_character_)),
+                           min.segment.length = 0) +
+  ylab("prevalence (naive)") + xlab("prevalence (model)")
+boxplot(abs(tb_results$mu - tb_results$mu_sample))
+p_mu <- tb_results %>% 
+  ggplot(aes(x = mu, y = mu_sample)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  ggrepel::geom_label_repel(aes(label = 
+                                  ifelse(abs(mu - mu_sample) > 0.5,
+                                         feature,
+                                         NA_character_)),
+                           min.segment.length = 0) +
+  xlab("logit relative abundance (model)") +
+  ylab("logit relative abundance (naive)")
+boxplot(abs(tb_results$sigma2 - tb_results$sigma2_sample) / tb_results$sigma2)
+p_sigma2 <- tb_results %>% 
+  dplyr::filter(sigma2 > 0) %>% 
+  ggplot(aes(x = 1 - pi0, y = (sigma2_sample - sigma2) / sigma2)) + 
+  geom_point() +
+  geom_hline(yintercept = 0) +
+  ggrepel::geom_label_repel(aes(label = 
+                                  ifelse(abs((sigma2 - sigma2_sample) / 
+                                               sigma2) > 6,
+                                         feature,
+                                         NA_character_)),
+                           min.segment.length = 0) +
+  xlab("prevalence") + ylab("relative change in sigma2")
+p_muVsPi <- tb_results %>% 
+  dplyr::arrange(-mu) %>% 
+  dplyr::mutate(is_extreme_mu = (1:dplyr::n()) %in% 1:3) %>% 
+  dplyr::arrange(pi0) %>% 
+  dplyr::mutate(is_low_pi0 = (1:dplyr::n()) %in% 1:2) %>% 
+  dplyr::arrange(-pi0) %>% 
+  dplyr::mutate(is_high_pi0 = (1:dplyr::n()) %in% 1:2) %>% 
+  ggplot(aes(x = mu, y = log(1-pi0) - log(pi0))) +
+  geom_point() +
+  ggrepel::geom_text_repel(aes(label = 
+                                  ifelse(is_extreme_mu | is_low_pi0 | is_high_pi0 |
+                                           feature == "Prevotella_copri",
+                                         feature,
+                                         NA_character_)),
+                           min.segment.length = 0) +
+  xlab("logit(relative abundance)") + ylab("logit(prevalence)")
+ggsave(paste0(dir_output, "pi0.pdf"), p_pi0, width = 6, height = 6)
+ggsave(paste0(dir_output, "mu.pdf"), p_mu, width = 6, height = 6)
+ggsave(paste0(dir_output, "sigma2.pdf"), p_sigma2, width = 6, height = 6)
+ggsave(paste0(dir_output, "muVsPi.pdf"), p_muVsPi, width = 6, height = 6)
+```

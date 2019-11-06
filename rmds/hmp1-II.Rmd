@@ -5,73 +5,35 @@ editor_options:
   chunk_output_type: inline
 ---
 ```{r setup, include=FALSE}
-rm(list = ls())
 knitr::opts_knit$set(root.dir = normalizePath("../../"))
 library(magrittr)
 library(ggplot2)
 ```
-```{r source functions, include=FALSE}
+```{r setup2, include=FALSE}
 # smar::sourceDir("functions/")
-smar::sourceDir("../ibd_paper/functions/")
-```
-```{r load data}
-# metadata
-metaphlan_log <- read.delim("data/hmp1-II/hmp1-II_humann2_logs-mtd.pcl",
-                            sep = "\t",
-                            check.names = FALSE,
-                            stringsAsFactors = FALSE)
-df_metadata <- metaphlan_log %>% 
-  t() %>% 
-  as.data.frame(check.names = FALSE, stringsAsFactors = FALSE) %>% 
-  set_colnames(unlist(.[1, ])) %>% 
-  dplyr::slice(-1)
-df_metadata <- df_metadata %>% 
-  dplyr::mutate(READS_initial = as.integer(READS_initial),
-                READS_pangenomes_aligned = as.integer(READS_pangenomes_aligned),
-                READS_pangenomes_aligned_frac = as.numeric(READS_pangenomes_aligned_frac),
-                read_depth = READS_initial * 0.05)
-# need to set rownames as dplyr discards them
-df_metadata <- df_metadata %>% 
-  set_rownames(colnames(metaphlan_log)[-1])
-
-# abd matrix
-metaphlan <- read.delim("data/hmp1-II/hmp1-II_metaphlan2-mtd-qcd.pcl",
-                        sep = "\t",
-                        check.names = FALSE,
-                        stringsAsFactors = FALSE)
-mat_abd <- metaphlan[-(1:8), -1] %>% 
-  as.matrix %>% 
-  apply(2, as.numeric) %>% 
-  set_rownames(metaphlan[-(1:8), 1])
-
-# common samples
-samples_common <- intersect(rownames(df_metadata),
-                            colnames(mat_abd))
-phylo_all <- phyloseq::phyloseq(phyloseq::otu_table(mat_abd[, samples_common], 
-                                                    taxa_are_rows = TRUE),
-                                phyloseq::sample_data(df_metadata[samples_common, ]))
-taxa_bacteria <- phyloseq::taxa_names(phylo_all) %>% 
-  stringr::str_subset(stringr::fixed("k__Bacteria"))
-phylo_all <- phylo_all %>% 
-  phyloseq::prune_taxa(taxa_bacteria, .)
+load("data/physeqs/HMP1II_stool.RData")
+mat_X_count <- smar::otu_table2(physeq_stool)
+mat_X <- apply(mat_X_count, 2, function(x) x / sum(x))
 ```
 
-```{r species level features}
-phylo_species <- phyloseq::taxa_names(phylo_all) %>% 
-  {and(stringr::str_detect(., stringr::fixed("|s__")),
-       !stringr::str_detect(., stringr::fixed("|t__")))} %>% 
-  phyloseq::prune_taxa(phylo_all)
+```{r fit params, include=FALSE}
+lfit_copulasso <- 
+  SparseDOSSA2:::copulasso(data = t(mat_X),
+                           lambda_list = seq(from = 0.05, to = 0.4, by = 0.05),
+                           K_CV = NULL)
+fit_copulasso <- lfit_copulasso$fits[[4]]
+
+df_marginals <- vapply(seq_len(nrow(mat_X)),
+                       function(i_sample)
+                         SparseDOSSA2:::estimate_featureParam_new(
+                           mat_X[i_sample, ]),
+                       c(0.0, 0.0, 0.0)) %>% t() %>% as.data.frame()
 ```
 
+```{r test mcmc}
 
-```{r subset to gut}
-phylo_species_gut <- phyloseq::subset_samples(phylo_species,
-                                              STSite == "Stool")
-phylo_species_gut <- phylo_species_gut %>% 
-  phyloseq::subset_samples(read_depth > 2)
-phylo_species_gut <- phylo_species_gut %>% 
-  smar::prune_taxaSamples()
 ```
+
 
 ```{r study individual features}
 dir_output <- "results/hmp1-II/"

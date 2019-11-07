@@ -1,49 +1,130 @@
-mcmc_a <- function(x,
-                   params,
-                   R = 100) {
-  p <- length(x)
+EM <- function(data, controls = list(ncores = 4,
+                                     lambda = 0.2,
+                                     R = 1000,
+                                     burnin = 0.1,
+                                     threshold = 1e-3,
+                                     maxit = 1000,
+                                     verbose = TRUE)) {
   
-  a <- 1
-  u <- a_to_u(a * x, pi0 = params$pi0, mu = params$mu, sigma = params$sigma)
-  g <- qnorm(u)
+  # Initialize using relative abundances
+  fit_marginals <- get_marginals(data)
+  fit_copulasso <- copulasso(data = data, 
+                             lambda_list = controls$lambda,
+                             K_CV = NULL, ## FIXME
+                             ncores = controls$ncores)
+  params <- list(pi0 = fit_marginals[, 1],
+                 mu = fit_marginals[,2],
+                 sigma = fit_marginals[, 3],
+                 Omega = fit_copulasso$fits[[1]])
   
+  i_iter <- 0
+  while(TRUE) {
+    i_iter <- i_iter + 1
+    if(controls$verbose)
+      print(i_iter)
+    
+    ## E step
+    doParallel::registerDoParallel(cores = controls$ncores)
+    e_asums <- foreach::`%dopar%`(
+      foreach::foreach(i_sample = seq_len(nrow(data)),
+                       .combine='c'),
+      {
+        asum_samples <- mcmc_asum(x = data[i_sample, , drop = TRUE],
+                                  params = params,
+                                  R = controls$R)
+        mean(vapply(
+          asum_samples[-seq_len(round(controls$R * controls$burnin))], 
+          function(i_asum) i_asum[["asum"]],
+          0.0))
+      })
+    
+    e_asums <- foreach::`%dopar%`(
+      foreach::foreach(i_sample = seq_len(nrow(data)),
+                       .combine='c'),
+      {
+        asum_samples <- integrate(integrand_asum, 
+                                  lower = -Inf, upper = Inf,)
+      })
+    doParallel::stopImplicitCluster()
+    
+    ## M step
+    a_data <- data * e_asums
+    fit_marginals <- get_marginals(a_data)
+    fit_copulasso <- copulasso(data = a_data, 
+                               lambda_list = controls$lambda,
+                               K_CV = NULL, ## FIXME
+                               ncores = controls$ncores
+    )
+    params_new <- list(pi0 = fit_marginals[, 1],
+                       mu = fit_marginals[,2],
+                       sigma = fit_marginals[, 3],
+                       Omega = fit_copulasso$fits[[1]])
+    
+    diff <- vapply(seq_along(params_new),
+                   function(i_param) {
+                     max(abs(params_new[[i_param]] - params[[i_param]]))
+                   },
+                   0.0)
+    print(diff)
+    
+    if(all(diff < controls$threshold))
+      break
+    if(i_iter > controls$maxit)
+      stop("Maximum iteration reached!")
+    
+    params <- params_new
+  }
+}
+
+
+mcmc_asum <- function(x,
+                      params,
+                      R = 100) {
   l_samples <- list()
-  l_samples[[1]] <- 
-    list(a = a,
-         loglik = 
-           log_dmvnorm(g = g, Omega = params$Omega) +
-           log(a) * p,
-         accept = TRUE)
-  
   for(r in seq_len(R)) {
-    l_samples[[r + 1]] <- 
-      one_step_a(
-        x = x,
-        a = l_samples[[r]]$a,
-        params = params,
-        loglik = l_samples[[r]]$loglik)
+    if(r == 1)
+      l_samples[[r]] <- 
+        one_step_asum(asum = NULL, logLik = NULL, 
+                      x = x, params = params)
+    else 
+      l_samples[[r]] <- 
+        one_step_asum(asum = l_samples[[r - 1]]$asum, 
+                      logLik = l_samples[[r - 1]]$logLik,
+                      x = x, params = params)
   }
   
   return(l_samples)
 }
 
-one_step_a <- function(x, a, loglik, params) {
-  p <- length(x)
+one_step_asum <- function(asum = NULL, logLik = NULL, 
+                          x, params) {
   
-  a_star <- exp(log(a) + rnorm(n = 1, sd = 0.1))
-  u_star <- a_to_u(a_star * x, 
+  if(is.null(asum)) {
+    asum_star <- sum(x) ## FIXME?
+    logLik <- -Inf
+  }
+  else 
+    asum_star <- exp(log(asum) + rnorm(n = 1, sd = 1)) ## FIXME
+  
+  u_star <- a_to_u(asum_star * x, 
                    pi0 = params$pi0, mu = params$mu, sigma = params$sigma)
   g_star <- qnorm(u_star)
-  loglik_star <- log_dmvnorm(g = g_star, Omega = params$Omega) + log(a_star) * p
-  prop <- 
-    exp(loglik_star - loglik)
+  logLik_star <- logLik_copula(g = g_star, asum = asum_star, x = x,
+                               mu = params$mu, sigma = params$sigma, 
+                               Omega = params$Omega)
+  
+  if(logLik_star == -Inf) ## FIXME
+    prop <- 0
+  else
+    prop <- exp(logLik_star - logLik)
+  
   if(runif(1) < prop)
-    return(list(a = a_star,
-                loglik = loglik_star,
+    return(list(asum = asum_star,
+                logLik = logLik_star,
                 accept = TRUE))
   else
-    return(list(a = a,
-                loglik = loglik,
+    return(list(asum = asum,
+                logLik = logLik,
                 accept = FALSE))
 }
 
@@ -59,25 +140,14 @@ a_to_u <- function(a, pi0, mu, sigma) {
   return(to_return)
 }
 
-log_dmvnorm <- function(g, Omega) {
-  return((-t(g) %*% Omega %*% g / 2)[1, 1, drop = TRUE])
+logLik_copula <- function(g, asum, x,
+                          mu, sigma, 
+                          Omega) {
+  if(any(g == Inf)) return(-Inf)
+  log_dmvnorm(S = g %*% t(g), Omega = Omega) + sum(g^2/2) - 
+    sum((log(asum * x[x > 0]) - mu[x > 0])^2 / (sigma[x > 0])^2 / 2)
 }
 
-EM_fit <- function(data, initials, controls) {
-  while(TRUE) {
-    ## E step
-    doParallel::registerDoParallel(cores = controls$ncores)
-    eas <- foreach::`%dopar%`(
-      foreach::foreach(i_sample = seq_len(nrow(data))),
-      {
-        a_samples <- SparseDOSSA2:::mcmc_a(x = data[i_sample, , drop = TRUE],
-                                           params = params,
-                                           R = controls$R)
-        SparseDOSSA2:::one_step_a(x = data[i_sample, , drop = TRUE],
-                                  params = params, a = a_samples[[80]]$a,
-                                  loglik = a_samples[[80]]$a)
-        return(mean(a_samples))
-      })
-    doParallel::stopImplicitCluster()
-  }
+log_dmvnorm <- function(S, Omega) {
+  - sum(Omega * S) / 2
 }

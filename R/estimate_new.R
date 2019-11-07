@@ -6,8 +6,16 @@ estimate_featureParam_new <- function(x) {
     sigma <- sd(log(x[ind_nonzero]))
   else
     sigma <- 1 ##FIXME
-
+  
   return(c("pi0" = pi0,
            "mu" = mu,
            "sigma" = sigma))
+}
+
+get_marginals <- function(X) {
+  t(vapply(seq_len(ncol(X)),
+           function(i_sample)
+             estimate_featureParam_new(
+               X[, i_sample, drop = TRUE]),
+           c(0.0, 0.0, 0.0)))
 }

@@ -25,33 +25,33 @@ EM <- function(data, controls = list(ncores = 4,
     
     ## E step
     doParallel::registerDoParallel(cores = controls$ncores)
-    # e_asums <- foreach::`%dopar%`(
-    #   foreach::foreach(i_sample = seq_len(nrow(data)),
-    #                    .combine='c'),
-    #   {
-    #     asum_samples <- mcmc_asum(x = data[i_sample, , drop = TRUE],
-    #                               params = params,
-    #                               R = controls$R)
-    #     mean(vapply(
-    #       asum_samples[-seq_len(round(controls$R * controls$burnin))], 
-    #       function(i_asum) i_asum[["asum"]],
-    #       0.0))
-    #   })
-    
     e_asums <- foreach::`%dopar%`(
       foreach::foreach(i_sample = seq_len(nrow(data)),
                        .combine='c'),
       {
-        asum_num <- integrate(vintegrand_num_asum, 
-                              lower = -20, upper = 20, ## FIXME
-                              x = data[i_sample, , drop = TRUE],
-                              params = params)
-        asum_denom <- integrate(vintegrand_denom_asum, 
-                                lower = -20, upper = 20, ## FIXME
-                                x = data[i_sample, , drop = TRUE],
-                                params = params)
-        asum_num$value / asum_denom$value
+        asum_samples <- mcmc_asum(x = data[i_sample, , drop = TRUE],
+                                  params = params,
+                                  R = controls$R)
+        mean(vapply(
+          asum_samples[-seq_len(round(controls$R * controls$burnin))],
+          function(i_asum) i_asum[["asum"]],
+          0.0))
       })
+    
+    # e_asums <- foreach::`%dopar%`(
+    #   foreach::foreach(i_sample = seq_len(nrow(data)),
+    #                    .combine='c'),
+    #   {
+    #     asum_num <- integrate(vintegrand_num_asum, 
+    #                           lower = -20, upper = 20, ## FIXME
+    #                           x = data[i_sample, , drop = TRUE],
+    #                           params = params)
+    #     asum_denom <- integrate(vintegrand_denom_asum, 
+    #                             lower = -20, upper = 20, ## FIXME
+    #                             x = data[i_sample, , drop = TRUE],
+    #                             params = params)
+    #     asum_num$value / asum_denom$value
+    #   })
     doParallel::stopImplicitCluster()
     
     ## M step
@@ -118,7 +118,7 @@ one_step_asum <- function(asum = NULL, logLik = NULL,
   
   u_star <- a_to_u(asum_star * x, 
                    pi0 = params$pi0, mu = params$mu, sigma = params$sigma)
-  g_star <- qnorm(u_star)
+  g_star <- u_to_g(u_star)
   logLik_star <- logLik_copula(g = g_star, asum = asum_star, x = x,
                                mu = params$mu, sigma = params$sigma, 
                                Omega = params$Omega)
@@ -140,7 +140,7 @@ one_step_asum <- function(asum = NULL, logLik = NULL,
 
 a_to_u <- function(a, pi0, mu, sigma) {
   to_return <-  pi0 / 2
-  if(any(a > 0)) 
+  if(any(a > 0)) ##FIXME
     to_return[a > 0] <- 
       pi0[a > 0] + 
       pnorm(log(a[a > 0]), 
@@ -151,10 +151,17 @@ a_to_u <- function(a, pi0, mu, sigma) {
   return(to_return)
 }
 
+u_to_g <- function(u, a, mu, sigma) {
+  g <- qnorm(u)
+  if(any(g == Inf)) ##FIXME
+    g[g == Inf] <- (log(a[g == Inf]) - mu[g == Inf]) / sigma[g == Inf]
+  
+  return(g)
+}
+
 logLik_copula <- function(g, asum, x,
                           mu, sigma, 
                           Omega) {
-  if(any(g == Inf)) return(-Inf)
   log_dmvnorm(S = g %*% t(g), Omega = Omega) + sum(g^2/2) - 
     sum((log(asum * x[x > 0]) - mu[x > 0])^2 / (sigma[x > 0])^2 / 2)
 }
@@ -167,7 +174,7 @@ integrand_num_asum <- function(log_asum, x, params) {
   asum <- exp(log_asum)
   u <- a_to_u(a(x, asum), 
               pi0 = params$pi0, mu = params$mu, sigma = params$sigma)
-  g <- qnorm(u)
+  g <- u_to_g(u)
   logLik <- logLik_copula(g = g, asum = asum, x = x,
                           mu = params$mu, sigma = params$sigma, 
                           Omega = params$Omega)
@@ -183,7 +190,7 @@ integrand_denom_asum <- function(log_asum, x, params) {
   asum <- exp(log_asum)
   u <- a_to_u(a(x, asum),
               pi0 = params$pi0, mu = params$mu, sigma = params$sigma)
-  g <- qnorm(u)
+  g <- u_to_g(u)
   logLik <- logLik_copula(g = g, asum = asum, x = x,
                           mu = params$mu, sigma = params$sigma, 
                           Omega = params$Omega)

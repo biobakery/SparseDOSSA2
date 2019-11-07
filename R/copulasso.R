@@ -81,6 +81,6 @@ get_s <- function(data, method = "spearman",
   iRho(s_s)
 }
 
-negLogLik_mvn <- function(S, Omega) {
+negLogLik_mvn <- function(S, Omega) { ##FIXME
   -log(det(Omega)) + sum(Omega * S)
 }

@@ -25,30 +25,40 @@ EM <- function(data, controls = list(ncores = 4,
     
     ## E step
     doParallel::registerDoParallel(cores = controls$ncores)
-    e_asums <- foreach::`%dopar%`(
-      foreach::foreach(i_sample = seq_len(nrow(data)),
-                       .combine='c'),
-      {
-        asum_samples <- mcmc_asum(x = data[i_sample, , drop = TRUE],
-                                  params = params,
-                                  R = controls$R)
-        mean(vapply(
-          asum_samples[-seq_len(round(controls$R * controls$burnin))], 
-          function(i_asum) i_asum[["asum"]],
-          0.0))
-      })
+    # e_asums <- foreach::`%dopar%`(
+    #   foreach::foreach(i_sample = seq_len(nrow(data)),
+    #                    .combine='c'),
+    #   {
+    #     asum_samples <- mcmc_asum(x = data[i_sample, , drop = TRUE],
+    #                               params = params,
+    #                               R = controls$R)
+    #     mean(vapply(
+    #       asum_samples[-seq_len(round(controls$R * controls$burnin))], 
+    #       function(i_asum) i_asum[["asum"]],
+    #       0.0))
+    #   })
     
     e_asums <- foreach::`%dopar%`(
       foreach::foreach(i_sample = seq_len(nrow(data)),
                        .combine='c'),
       {
-        asum_samples <- integrate(integrand_asum, 
-                                  lower = -Inf, upper = Inf,)
+        asum_num <- integrate(vintegrand_num_asum, 
+                              lower = -20, upper = 20, ## FIXME
+                              x = data[i_sample, , drop = TRUE],
+                              params = params)
+        asum_denom <- integrate(vintegrand_denom_asum, 
+                                lower = -20, upper = 20, ## FIXME
+                                x = data[i_sample, , drop = TRUE],
+                                params = params)
+        asum_num$value / asum_denom$value
       })
     doParallel::stopImplicitCluster()
     
     ## M step
     a_data <- data * e_asums
+    a_data[is.na(e_asums), ] <- 
+      data[is.na(e_asums), ] * 
+      mean(e_asums, na.rm = TRUE) ## FIXME
     fit_marginals <- get_marginals(a_data)
     fit_copulasso <- copulasso(data = a_data, 
                                lambda_list = controls$lambda,
@@ -130,12 +140,13 @@ one_step_asum <- function(asum = NULL, logLik = NULL,
 
 a_to_u <- function(a, pi0, mu, sigma) {
   to_return <-  pi0 / 2
-  to_return[a > 0] <- 
-    pi0[a > 0] + 
-    pnorm(log(a[a > 0]), 
-          mean = mu[a > 0], 
-          sd = sigma[a > 0]) * 
-    (1 - pi0[a > 0])
+  if(any(a > 0)) 
+    to_return[a > 0] <- 
+      pi0[a > 0] + 
+      pnorm(log(a[a > 0]), 
+            mean = mu[a > 0], 
+            sd = sigma[a > 0]) * 
+      (1 - pi0[a > 0])
   
   return(to_return)
 }
@@ -150,4 +161,42 @@ logLik_copula <- function(g, asum, x,
 
 log_dmvnorm <- function(S, Omega) {
   - sum(Omega * S) / 2
+}
+
+integrand_num_asum <- function(log_asum, x, params) {
+  asum <- exp(log_asum)
+  u <- a_to_u(a(x, asum), 
+              pi0 = params$pi0, mu = params$mu, sigma = params$sigma)
+  g <- qnorm(u)
+  logLik <- logLik_copula(g = g, asum = asum, x = x,
+                          mu = params$mu, sigma = params$sigma, 
+                          Omega = params$Omega)
+  
+  
+  return(exp(logLik) * asum)
+}
+
+vintegrand_num_asum <- Vectorize(integrand_num_asum,
+                                 vectorize.args = "log_asum")
+
+integrand_denom_asum <- function(log_asum, x, params) {
+  asum <- exp(log_asum)
+  u <- a_to_u(a(x, asum),
+              pi0 = params$pi0, mu = params$mu, sigma = params$sigma)
+  g <- qnorm(u)
+  logLik <- logLik_copula(g = g, asum = asum, x = x,
+                          mu = params$mu, sigma = params$sigma, 
+                          Omega = params$Omega)
+  
+  return(exp(logLik))
+}
+
+vintegrand_denom_asum <- Vectorize(integrand_denom_asum, 
+                                   vectorize.args = "log_asum")
+
+a <- function(x, asum) {
+  a <- x
+  a[x > 0] <- x[x > 0] * asum
+  
+  return(a)
 }

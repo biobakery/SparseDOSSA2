@@ -26,12 +26,12 @@ mat_X <- t(apply(mat_X_count, 1, function(x) x / sum(x)))
 ```{r EM_mcmc, echo=FALSE}
 time <- Sys.time()
 fit_EM_mcmc <- SparseDOSSA2:::EM_diagnose(data = mat_X,
-                                          controls = list(ncores = 25,
+                                          controls = list(ncores = 6,
                                                           lambda = 0.2,
-                                                          R = 100,
-                                                          subdivisions = 100,
+                                                          R = 10000,
+                                                          subdivisions = 10000,
                                                           burnin = 0.1,
-                                                          maxit = 5,
+                                                          maxit = 20,
                                                           method = "mcmc",
                                                           verbose = FALSE))
 print(Sys.time() - time)
@@ -53,12 +53,12 @@ seq_along(fit_EM_mcmc$ll_easums) %>%
 ```{r EM_numint, echo=FALSE}
 time <- Sys.time()
 fit_EM_numint <- SparseDOSSA2:::EM_diagnose(data = mat_X,
-                                          controls = list(ncores = 25,
+                                          controls = list(ncores = 6,
                                                           lambda = 0.2,
-                                                          R = 100,
-                                                          subdivisions = 100,
+                                                          R = 10000,
+                                                          subdivisions = 100000,
                                                           burnin = 0.1,
-                                                          maxit = 5,
+                                                          maxit = 20,
                                                           method = "numint",
                                                           verbose = FALSE))
 print(Sys.time() - time)

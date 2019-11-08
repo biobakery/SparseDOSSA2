@@ -114,20 +114,7 @@ f_x(x) = \int f_a(a) (a^s)^{p - 1} da^s
 Not all parameters for $f_a(a)$ are identifiable from $f_x(x)$ - constraints 
 needed for maximizing likelihood!
 
-* $\Omega$ not identifiable. 
-  
-  * Example: let $\log a \sim$ MVN with unit marginal variance (i.e., 
-    $\pi_{0j} = 0, \sigma_j = 1$). Then integrating over $a$ gives 
-    $\Omega - \frac{\Omega \mathbf{1}_p\mathbf{1}_p^\prime \Omega}{\mathbf{1}_p^\prime \Omega \mathbf{1}_p}$ in the likelihood for $\log x$. $\Omega + c$
-    map to the same value (Fang et al., 2017)!
-    
-  * Solution: $L_1$ penalization.
-
-* Given $\Omega$, $\sigma_j$ is identifiable.
-  
-  * Intuition: only the log-MVN case ($\pi_{0j} = 0$). 
-    $F diag (\sigma_1, \dots, \sigma_p) = F diag (\sigma_1^*, \dots, \sigma_p^*)$
-    gives that $\sigma_1 = \sigma_1^*, \dots, \sigma_p = \sigma_p^*$!
+* $\pi_{0j}$ are identifiable ($a_j = 0 \Leftrightarrow x_j = 0$).
 
 * $\mu_j$ not identifiable. 
   
@@ -144,7 +131,20 @@ needed for maximizing likelihood!
     * Since $\mu$ can be shifted by a constant and still yield the same marginals
       for $x$, can just estiamte $\mu$ as $(E [\log x_1 | x_1 > 0], \dots, E [\log x_p | x_p > 0])$
 
-* $\pi_{0j}$ are identifiable ($a_j = 0 \Leftrightarrow x_j = 0$).
+* $\Omega$ not identifiable. 
+  
+  * Example: let $\log a \sim$ MVN with unit marginal variance (i.e., 
+    $\pi_{0j} = 0, \sigma_j = 1$). Then integrating over $a$ gives 
+    $\Omega - \frac{\Omega \mathbf{1}_p\mathbf{1}_p^\prime \Omega}{\mathbf{1}_p^\prime \Omega \mathbf{1}_p}$ in the likelihood for $\log x$. $\Omega + c$
+    map to the same value (Fang et al., 2017)!
+    
+  * Solution: $L_1$ penalization.
+
+* Given $\Omega$, $\sigma_j$ is identifiable.
+  
+  * Intuition: only the log-MVN case ($\pi_{0j} = 0$). 
+    $F diag (\sigma_1, \dots, \sigma_p) = F diag (\sigma_1^*, \dots, \sigma_p^*)$
+    gives that $\sigma_1 = \sigma_1^*, \dots, \sigma_p = \sigma_p^*$!
 
 ## EM fitting
 

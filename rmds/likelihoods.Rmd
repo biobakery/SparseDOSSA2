@@ -1,0 +1,49 @@
+---
+title: "Likelihoods"
+author: "Siyuan Ma"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "../")
+library(magrittr)
+library(ggplot2)
+```
+
+```{r load data, include=FALSE}
+load("../data/physeqs/genera.RData")
+physeq <- physeq_genera %>% 
+  phyloseq::subset_samples(dataset_name == "MucosalIBD") %>% 
+  smar::prune_taxaSamples(flist_taxa = genefilter::kOverA(k = 5, A = 1))
+mat_X_count <- t(smar::otu_table2(physeq))
+colnames(mat_X_count) <- CRTmicrobiome:::simplify_feature(colnames(mat_X_count))
+mat_X <- t(apply(mat_X_count, 1, function(x) x / sum(x)))
+```
+
+## Numeric calculation of likelihood
+* Goal: calculation $f_C(c | \theta)$
+
+\begin{align}
+f_C(c | \theta) = \int f_C(c | x) f_X(x | \theta) dx
+\end{align}
+
+* Problems and solutions:
+  * $f_C(c | x)$ multinomial, and as function of $x$ is concentrated around 
+    $\hat{x} = \frac{c}{\sum c}$
+    
+    * Solution: propose $x$ from densitiy $g(x)$ around $\hat{x}$. Estimate $f_C(c | \theta)$ as
+      $E_g \frac{f_C(c | x)}{g(x)} f_X(x | \theta)$
+  * $g$ has restrictions:
+    
+    * Must be zero-inflated ($0 < P_g(x_j = 0) < 1$) since $f_X$ is 
+      zero-inflated
+    * Must be compositional since $f_X$ is compositional
+    * Solution: propose $\tilde{x}_j$ from normal $\times$ bernoulli, then let
+      $x = \frac{\tilde{x}}{\sum{\tilde{x}}}$
+  * Computation
+    
+    * For each $c$, need $R$ Monte Carlo samples of $x$ from $g$ to calculate 
+      $E_g$
+    * For each $x$, need $R$ Monte Carlo samples to calculate $g(x)$ and 
+      $f_X(x | \theta)$
+    * Computation cost is $n * R^2$

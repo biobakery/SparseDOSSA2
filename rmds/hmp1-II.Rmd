@@ -12,26 +12,13 @@ library(ggplot2)
 ```{r setup2, include=FALSE}
 # smar::sourceDir("functions/")
 load("data/physeqs/HMP1II_stool.RData")
-mat_X_count <- smar::otu_table2(physeq_stool)
-mat_X <- apply(mat_X_count, 2, function(x) x / sum(x))
-```
-
-```{r fit params, include=FALSE}
-lfit_copulasso <- 
-  SparseDOSSA2:::copulasso(data = t(mat_X),
-                           lambda_list = seq(from = 0.05, to = 0.4, by = 0.05),
-                           K_CV = NULL)
-fit_copulasso <- lfit_copulasso$fits[[4]]
-
-df_marginals <- vapply(seq_len(nrow(mat_X)),
-                       function(i_sample)
-                         SparseDOSSA2:::estimate_featureParam_new(
-                           mat_X[i_sample, ]),
-                       c(0.0, 0.0, 0.0)) %>% t() %>% as.data.frame()
+mat_X_count <- t(smar::otu_table2(physeq_stool))
+mat_X <- t(apply(mat_X_count, 1, function(x) x / sum(x)))
 ```
 
 ```{r test mcmc}
-
+debug(SparseDOSSA2:::EM)
+fit_EM <- SparseDOSSA2:::EM(data = mat_X)
 ```
 
 

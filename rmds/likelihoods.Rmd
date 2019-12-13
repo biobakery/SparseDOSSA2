@@ -20,6 +20,45 @@ colnames(mat_X_count) <- CRTmicrobiome:::simplify_feature(colnames(mat_X_count))
 mat_X <- t(apply(mat_X_count, 1, function(x) x / sum(x)))
 ```
 
+```{r whats wrong with likelihood}
+load("../results/EM_diagnostics/mcmc.RData")
+
+tmp <- sapply(seq_len(nrow(mat_X)),
+              function(i) {
+                dx(x = mat_X[i, ],
+                   pi0 = fit_EM_mcmc$ll_params[[20]]$pi0,
+                   mu = fit_EM_mcmc$ll_params[[20]]$mu,
+                   sigma = fit_EM_mcmc$ll_params[[20]]$sigma,
+                   Omega = fit_EM_mcmc$ll_params[[20]]$Omega)$abs.error
+              })
+dmultinom(mat_X_count[1, ], prob = mat_X[1, ])
+samples <- rtest(n = 10000, x = mat_X_count[1, ])
+
+probs <- vapply(seq_len(nrow(samples)),
+                function(i) dmultinom(mat_X_count[1, ], prob = samples[i, ]),
+                0.0)
+rtest <- function(n, x) {
+  size <- sum(x)
+  x_pseudo <- ifelse(x > 0,
+                     x / size,
+                     (x + 0.5) / size)
+  mean_norm <- log(x_pseudo)
+  sd_norm <- sqrt((1 - x_pseudo) / x_pseudo / size)
+  samples <- vapply(seq_along(x), 
+                    function(j) {
+                      rj <- exp(rnorm(n = n, 
+                                      mean = mean_norm[j],
+                                      sd = sd_norm[j]))
+                      if(x[j] == 0)
+                        rj <- rj * rbinom(n = n, size = 1, prob = 0.5)
+                      return(rj)
+                    },
+                    rep(0.0, n))
+  return(samples / apply(samples, 1, sum))
+}
+
+```
+
 ## Numeric calculation of likelihood
 * Goal: calculation $f_C(c | \theta)$
 

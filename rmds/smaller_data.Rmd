@@ -24,28 +24,28 @@ mat_X <- t(apply(mat_X_count, 1, function(x) x / sum(x)))
 # Run MCMC based EM
 
 ```{r EM_mcmc, echo=FALSE}
-time <- Sys.time()
-fit_EM_mcmc <- SparseDOSSA2:::EM_diagnose(data = mat_X,
-                                          controls = list(ncores = 6,
-                                                          lambda = 0.2,
-                                                          R = 10000,
-                                                          subdivisions = 10000,
-                                                          burnin = 0.1,
-                                                          maxit = 20,
-                                                          method = "mcmc",
-                                                          verbose = FALSE))
-print(Sys.time() - time)
-save(fit_EM_mcmc, file = "../results/EM_diagnostics/mcmc.RData")
-seq_along(fit_EM_mcmc$ll_easums) %>%
-  purrr::map_dfr(function(i_iter) {
-    tibble::tibble(
-      error = mean(fit_EM_mcmc$ll_easums[[i_iter]][, 2]),
-      diff = fit_EM_mcmc$ll_params[[i_iter]]$diff[1],
-      i_iter = i_iter
-    )
-  }) %>%
-  tidyr::pivot_longer(cols = c("error", "diff")) %>%
-  ggplot(aes(x = i_iter, y = log10(value), color = name)) + geom_point()
+# time <- Sys.time()
+# fit_EM_mcmc <- SparseDOSSA2:::EM_diagnose(data = mat_X,
+#                                           controls = list(ncores = 6,
+#                                                           lambda = 0.2,
+#                                                           R = 10000,
+#                                                           subdivisions = 10000,
+#                                                           burnin = 0.1,
+#                                                           maxit = 20,
+#                                                           method = "mcmc",
+#                                                           verbose = FALSE))
+# print(Sys.time() - time)
+# save(fit_EM_mcmc, file = "../results/EM_diagnostics/mcmc.RData")
+# seq_along(fit_EM_mcmc$ll_easums) %>%
+#   purrr::map_dfr(function(i_iter) {
+#     tibble::tibble(
+#       error = mean(fit_EM_mcmc$ll_easums[[i_iter]][, 2]),
+#       diff = fit_EM_mcmc$ll_params[[i_iter]]$diff[1],
+#       i_iter = i_iter
+#     )
+#   }) %>%
+#   tidyr::pivot_longer(cols = c("error", "diff")) %>%
+#   ggplot(aes(x = i_iter, y = log10(value), color = name)) + geom_point()
 ```
 
 # Run numerical integration based EM

@@ -1,7 +1,7 @@
 dx <- function(x, 
                pi0, mu, sigma, Omega,
                control) {
-  control <- do.call("dx_control", control)
+  control <- do.call("integrate_control", control)
   
   int_limits <- get_intLimits(vintegrand_dx, 
                               limit_max = control$limit_max, 
@@ -25,14 +25,13 @@ dx <- function(x,
     fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
   }
     
-  
   if(control$only_value)
     return(fit_integrate$value)
   else
     return(fit_integrate)
 }
 
-dx_control <- function(limit_max = 50,
+integrate_control <- function(limit_max = 50,
                        limit_min = 0.1,
                        step_size = 2,
                        subdivisions = 10000,
@@ -88,6 +87,49 @@ integrand_dx <- function(log_asum, x,
 }
 
 vintegrand_dx <- Vectorize(integrand_dx, 
+                           vectorize.args = "log_asum")
+
+ea <- function(x, 
+               pi0, mu, sigma, Omega,
+               control) {
+  control <- do.call("integrate_control", control)
+  
+  int_limits <- get_intLimits(vintegrand_ea, 
+                              limit_max = control$limit_max, 
+                              limit_min = control$limit_min,
+                              step_size = control$step_size,
+                              x = x, pi0 = pi0, mu = mu, 
+                              sigma = sigma, Omega = Omega)
+  
+  fit_integrate <- integrate(vintegrand_ea,
+                             subdivisions = control$subdivisions,
+                             rel.tol = .Machine$double.eps^0.5,
+                             lower = int_limits[1], upper = int_limits[2],
+                             x = x,
+                             pi0 = pi0,
+                             mu = mu,
+                             sigma = sigma,
+                             Omega = Omega)  
+  
+  if(control$jacobian) {
+    fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
+    fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+  }
+  
+  if(control$only_value)
+    return(fit_integrate$value)
+  else
+    return(fit_integrate)
+}
+
+integrand_ea <- function(log_asum, x, 
+                         pi0, mu, sigma, Omega) {
+  dloga(a = a(x, exp(log_asum)),
+        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+        log = FALSE) * exp(log_asum)
+}
+
+vintegrand_ea <- Vectorize(integrand_ea, 
                            vectorize.args = "log_asum")
 # integrand_num_asum <- function(log_asum, x, params) {
 #   asum <- exp(log_asum)

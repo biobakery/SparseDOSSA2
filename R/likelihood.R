@@ -1,24 +1,28 @@
 dx <- function(x, 
                pi0, mu, sigma, Omega,
-               control) {
+               control = list()) {
   control <- do.call("integrate_control", control)
   
-  int_limits <- get_intLimits(vintegrand_dx, 
-                              limit_max = control$limit_max, 
-                              limit_min = control$limit_min,
-                              step_size = control$step_size,
-                              x = x, pi0 = pi0, mu = mu, 
-                              sigma = sigma, Omega = Omega)
+  # int_limits <- get_intLimits(vintegrand_dx, 
+  #                             limit_max = control$limit_max, 
+  #                             limit_min = control$limit_min,
+  #                             step_size = control$step_size,
+  #                             x = x, pi0 = pi0, mu = mu, 
+  #                             sigma = sigma, Omega = Omega)
   
-  fit_integrate <- integrate(vintegrand_dx,
-                             subdivisions = control$subdivisions,
-                             rel.tol = .Machine$double.eps^0.5,
-                             lower = int_limits[1], upper = int_limits[2],
-                             x = x,
-                             pi0 = pi0,
-                             mu = mu,
-                             sigma = sigma,
-                             Omega = Omega)  
+  fit_integrate <- 
+    Rmpfr::integrateR(vintegrand_dx,
+                      lower = Rmpfr::mpfr(-control$limit_max, 
+                                          precBits = control$precBits), 
+                      upper = Rmpfr::mpfr(control$limit_max, 
+                                          precBits = control$precBits),
+                      rel.tol = control$rel.tol,
+                      abs.tol = control$abs.tol,
+                      x = x,
+                      pi0 = pi0,
+                      mu = mu,
+                      sigma = sigma,
+                      Omega = Omega)  
   
   if(control$jacobian) {
     fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
@@ -32,14 +36,20 @@ dx <- function(x,
 }
 
 integrate_control <- function(limit_max = 50,
-                       limit_min = 0.1,
-                       step_size = 2,
-                       subdivisions = 10000,
-                       only_value = TRUE,
-                       jacobian = FALSE) {
+                              precBits = 100,
+                              limit_min = 0.1,
+                              step_size = 2,
+                              rel.tol = 1e-10,
+                              abs.tol = 0,
+                              subdivisions = 10000,
+                              only_value = TRUE,
+                              jacobian = FALSE) {
   list(limit_max = limit_max,
+       precBits = precBits,
        limit_min = limit_min,
        step_size = step_size,
+       rel.tol = rel.tol,
+       abs.tol = abs.tol,
        subdivisions = subdivisions,
        only_value = only_value,
        jacobian = jacobian)
@@ -48,15 +58,18 @@ integrate_control <- function(limit_max = 50,
 dloga <- function(a,
                   pi0, mu, sigma, Omega, 
                   log = TRUE) {
-  u <- a_to_u(a,
+  u <- a_to_u(Rmpfr::toNum(a), ## FIXME
               pi0 = pi0, mu = mu, sigma = sigma)
-  g <- u_to_g(u = u, a = a, mu = mu, sigma = sigma)
+  g <- u_to_g(u = u, a = Rmpfr::toNum(a), mu = mu, sigma = sigma) ## FIXME
   
-  log_d <- du(g, Omega) - 
-    sum((log(a[a > 0]) - mu[a > 0])^2 / (sigma[a > 0])^2 / 2) -
-    log(2 * pi) / 2 * sum(a > 0) - sum(log(sigma[a > 0])) + 
-    sum(log(pi0[a == 0])) + sum(log(1 - pi0[a > 0]))
-  
+  if(any(abs(g) == Inf)) {
+    log_d <- Rmpfr::mpfr(-Inf, precBits = Rmpfr::getPrec(a)[1]) ## FIXME
+  } else {
+    log_d <- du(g, Omega) - 
+      sum((log(a[a > 0]) - mu[a > 0])^2 / (sigma[a > 0])^2 / 2) -
+      log(2 * pi) / 2 * sum(a > 0) - sum(log(sigma[a > 0])) 
+  }
+    
   if(log)
     return(log_d)
   else
@@ -86,9 +99,13 @@ integrand_dx <- function(log_asum, x,
         log = FALSE)
 }
 
-vintegrand_dx <- Vectorize(integrand_dx, 
-                           vectorize.args = "log_asum")
-
+vintegrand_dx <- function(log_asum, x, 
+                          pi0, mu, sigma, Omega) {
+  Rmpfr::sapplyMpfr(log_asum,
+                    integrand_dx,
+                    x, pi0, mu, sigma, Omega)
+}
+  
 ea <- function(x, 
                pi0, mu, sigma, Omega,
                control) {
@@ -104,6 +121,7 @@ ea <- function(x,
   fit_integrate <- integrate(vintegrand_ea,
                              subdivisions = control$subdivisions,
                              rel.tol = .Machine$double.eps^0.5,
+                             abs.tol = 0,
                              lower = int_limits[1], upper = int_limits[2],
                              x = x,
                              pi0 = pi0,

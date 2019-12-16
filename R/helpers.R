@@ -57,8 +57,10 @@ u_to_g <- function(u, a, mu, sigma) {
 }
 
 a <- function(x, asum) {
-  a <- x
-  a[x > 0] <- x[x > 0] * asum # in case asum is Inf
+  a <- x * asum
+  # In case asum is Inf
+  # FIXME since this isn't supposed to happen?
+  a[x == 0] <- 0  
   
   return(a)
 }

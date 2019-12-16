@@ -56,12 +56,14 @@ EM_diagnose <- function(data,
                     pi0 = params$pi0, mu = params$mu, 
                     sigma = params$sigma, Omega = params$Omega,
                     control = list(subdivisions = control$subdivisions,
-                                   only_value = FALSE))
+                                   only_value = FALSE,
+                                   proper = FALSE))
           denom <- dx(x = data[i_sample, , drop = TRUE],
                       pi0 = params$pi0, mu = params$mu, 
                       sigma = params$sigma, Omega = params$Omega,
                       control = list(subdivisions = control$subdivisions,
-                                     only_value = FALSE))
+                                     only_value = FALSE,
+                                     proper = FALSE))
           return(c("mean" = num$value / denom$value,
                    "error" = abs(num$abs.error / denom$value) + 
                      abs(num$value / (denom$value)^2 * 
@@ -72,7 +74,7 @@ EM_diagnose <- function(data,
     ll_easums[[i_iter]] <- e_asums
     
     ## M step
-    a_data <- data * e_asums[, 1]
+    a_data <- (data * e_asums[, 1])[!is.na(e_asums[, 1]), ] ## FIXME
     fit_sigmas <- get_sigmas(a_data, params$mu)
     fit_copulasso <- copulasso(data = a_data, 
                                lambda_list = control$lambda,

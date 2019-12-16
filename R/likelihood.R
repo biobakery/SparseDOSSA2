@@ -3,30 +3,45 @@ dx <- function(x,
                control = list()) {
   control <- do.call("integrate_control", control)
   
-  # int_limits <- get_intLimits(vintegrand_dx, 
-  #                             limit_max = control$limit_max, 
-  #                             limit_min = control$limit_min,
-  #                             step_size = control$step_size,
-  #                             x = x, pi0 = pi0, mu = mu, 
-  #                             sigma = sigma, Omega = Omega)
+  ## FIXME
+  offset <- dloga(a = x,
+                  pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  if(offset == -Inf) 
+    stop("Something went wrong!")
   
+  int_limits <- get_intLimits(vintegrand_dx,
+                              limit_max = control$limit_max,
+                              limit_min = control$limit_min,
+                              step_size = control$step_size,
+                              x = x, pi0 = pi0, mu = mu,
+                              sigma = sigma, Omega = Omega,
+                              offset = offset)
+
   fit_integrate <- 
-    Rmpfr::integrateR(vintegrand_dx,
-                      lower = Rmpfr::mpfr(-control$limit_max, 
-                                          precBits = control$precBits), 
-                      upper = Rmpfr::mpfr(control$limit_max, 
-                                          precBits = control$precBits),
-                      rel.tol = control$rel.tol,
-                      abs.tol = control$abs.tol,
-                      x = x,
-                      pi0 = pi0,
-                      mu = mu,
-                      sigma = sigma,
-                      Omega = Omega)  
+    integrate(vintegrand_dx,
+              lower = int_limits[1], upper = int_limits[2], 
+              rel.tol = control$rel.tol, abs.tol = control$abs.tol,
+              subdivisions = control$subdivisions,
+              x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+              offset = offset)
+  
+  fit_integrate$value <- 
+    Rmpfr::mpfr(fit_integrate$value,
+                precBits = control$precBits) *
+    exp(Rmpfr::mpfr(offset, precBits = control$precBits))
+  fit_integrate$abs.error <- 
+    Rmpfr::mpfr(fit_integrate$abs.error,
+                precBits = control$precBits) *
+    exp(Rmpfr::mpfr(offset, precBits = control$precBits))
   
   if(control$jacobian) {
     fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
     fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+  }
+  
+  if(control$to_num) {
+    fit_integrate$value <- Rmpfr::toNum(fit_integrate$value)
+    fit_integrate$abs.error <- Rmpfr::toNum(fit_integrate$abs.error)
   }
     
   if(control$only_value)
@@ -39,11 +54,12 @@ integrate_control <- function(limit_max = 50,
                               precBits = 100,
                               limit_min = 0.1,
                               step_size = 2,
-                              rel.tol = 1e-10,
+                              rel.tol = 1e-6,
                               abs.tol = 0,
                               subdivisions = 10000,
                               only_value = TRUE,
-                              jacobian = FALSE) {
+                              jacobian = FALSE,
+                              to_num = FALSE) {
   list(limit_max = limit_max,
        precBits = precBits,
        limit_min = limit_min,
@@ -52,18 +68,19 @@ integrate_control <- function(limit_max = 50,
        abs.tol = abs.tol,
        subdivisions = subdivisions,
        only_value = only_value,
-       jacobian = jacobian)
+       jacobian = jacobian,
+       to_num = to_num)
 }
 
 dloga <- function(a,
                   pi0, mu, sigma, Omega, 
                   log = TRUE) {
-  u <- a_to_u(Rmpfr::toNum(a), ## FIXME
+  u <- a_to_u(a,
               pi0 = pi0, mu = mu, sigma = sigma)
-  g <- u_to_g(u = u, a = Rmpfr::toNum(a), mu = mu, sigma = sigma) ## FIXME
+  g <- u_to_g(u = u, a = a, mu = mu, sigma = sigma) ## FIXME
   
   if(any(abs(g) == Inf)) {
-    log_d <- Rmpfr::mpfr(-Inf, precBits = Rmpfr::getPrec(a)[1]) ## FIXME
+    log_d <- -Inf
   } else {
     log_d <- du(g, Omega) - 
       sum((log(a[a > 0]) - mu[a > 0])^2 / (sigma[a > 0])^2 / 2) -
@@ -93,23 +110,25 @@ log_dmvnorm <- function(S, Omega) {
 }
 
 integrand_dx <- function(log_asum, x, 
-                         pi0, mu, sigma, Omega) {
-  dloga(a = a(x, exp(log_asum)),
-        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-        log = FALSE)
+                         pi0, mu, sigma, Omega,
+                         offset) {
+  exp(dloga(a = a(x, exp(log_asum)),
+            pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega) - 
+        offset)
 }
 
-vintegrand_dx <- function(log_asum, x, 
-                          pi0, mu, sigma, Omega) {
-  Rmpfr::sapplyMpfr(log_asum,
-                    integrand_dx,
-                    x, pi0, mu, sigma, Omega)
-}
-  
+vintegrand_dx <- Vectorize(integrand_dx, vectorize.args = "log_asum")
+
 ea <- function(x, 
                pi0, mu, sigma, Omega,
                control) {
   control <- do.call("integrate_control", control)
+  
+  ## FIXME
+  offset <- dloga(a = x,
+                  pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  if(offset == -Inf) 
+    stop("Something went wrong!")
   
   int_limits <- get_intLimits(vintegrand_ea, 
                               limit_max = control$limit_max, 
@@ -141,10 +160,12 @@ ea <- function(x,
 }
 
 integrand_ea <- function(log_asum, x, 
-                         pi0, mu, sigma, Omega) {
-  dloga(a = a(x, exp(log_asum)),
-        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-        log = FALSE) * exp(log_asum)
+                         pi0, mu, sigma, Omega, 
+                         offset) {
+  exp(dloga(a = a(x, exp(log_asum)),
+            pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+            log = TRUE) - 
+        offset + log_asum)
 }
 
 vintegrand_ea <- Vectorize(integrand_ea, 

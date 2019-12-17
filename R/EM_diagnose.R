@@ -1,12 +1,6 @@
 EM_diagnose <- function(data, 
-                        control = list(ncores = 6,
-                                       lambda = 0.2,
-                                       R = 10000,
-                                       subdivisions = 10000,
-                                       burnin = 0.1,
-                                       maxit = 30,
-                                       method = "mcmc",
-                                       verbose = TRUE)) {
+                        control = list()) {
+  control <- do.call("control_EM", control)
   
   # Initialize using relative abundances
   fit_marginals <- get_marginals(data)
@@ -37,14 +31,14 @@ EM_diagnose <- function(data,
         {
           asum_samples <- mcmc_asum(x = data[i_sample, , drop = TRUE],
                                     params = params,
-                                    R = control$R)
+                                    R = control$control_mcmc$R)
           asum_samples <- vapply(
-            asum_samples[-seq_len(round(control$R * control$burnin))],
+            asum_samples[-seq_len(round(control$control_mcmc$R * control$control_mcmc$burnin))],
             function(i_asum) i_asum[["asum"]],
             0.0)
           return(c("mean" = mean(asum_samples), 
                    "error" = sd(log(asum_samples)) / 
-                     sqrt(control$R*(1 - control$burnin))))
+                     sqrt(control$control_mcmc$R*(1 - control$control_mcmc$burnin))))
         })
     }
     if(control$method == "numint") {
@@ -52,18 +46,22 @@ EM_diagnose <- function(data,
         foreach::foreach(i_sample = seq_len(nrow(data)),
                          .combine='rbind'),
         {
+          if(i_iter == 1) offset_a <- 1
+          else offset_a <- ll_easums[[i_iter - 1]][i_sample, 1]
           num <- ea(x = data[i_sample, , drop = TRUE],
                     pi0 = params$pi0, mu = params$mu, 
                     sigma = params$sigma, Omega = params$Omega,
-                    control = list(subdivisions = control$subdivisions,
-                                   only_value = FALSE,
-                                   proper = FALSE))
+                    offset_a = offset_a,
+                    control = c(control$control_numint, 
+                                list(only_value = FALSE,
+                                     proper = FALSE)))
           denom <- dx(x = data[i_sample, , drop = TRUE],
                       pi0 = params$pi0, mu = params$mu, 
                       sigma = params$sigma, Omega = params$Omega,
-                      control = list(subdivisions = control$subdivisions,
-                                     only_value = FALSE,
-                                     proper = FALSE))
+                      offset_a = offset_a,
+                      control = c(control$control_numint, 
+                                  list(only_value = FALSE,
+                                       proper = FALSE)))
           return(c("mean" = num$value / denom$value,
                    "error" = abs(num$abs.error / denom$value) + 
                      abs(num$value / (denom$value)^2 * 
@@ -96,4 +94,26 @@ EM_diagnose <- function(data,
   }
   
   return(list(ll_easums = ll_easums, ll_params = ll_params))
+}
+
+control_EM <- function(ncores = 6,
+                       lambda = 0.2,
+                       maxit = 30,
+                       method = "mcmc",
+                       verbose = FALSE,
+                       control_mcmc = list(R = 10000,
+                                           burnin = 0.1),
+                       control_numint = list(subdivisions = 10000,
+                                             limit_max = 50,
+                                             limit_min = 1e-10,
+                                             step_size = 2,
+                                             rel.tol = 1e-6,
+                                             abs.tol = 1e-6)) {
+  list(ncores = ncores,
+       lambda = lambda,
+       maxit = maxit,
+       method = method,
+       verbose = verbose,
+       control_mcmc = control_mcmc,
+       control_numint = control_numint)
 }

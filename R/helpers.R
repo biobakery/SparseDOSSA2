@@ -75,12 +75,13 @@ get_sigmas <- function(data, mu) {
 }
 
 get_intLimits <- function(f, 
-                          limit_max, limit_min, step_size,
+                          center = 0, limit_max, limit_min, step_size,
                           ...) {
-  vlim_lower <- -exp(seq(from = log(limit_max),
-                         to = log(limit_min),
-                         by = -log(step_size)))
-  vlim_upper <- -vlim_lower
+  vchange <- exp(seq(from = log(limit_max),
+                     to = log(limit_min),
+                     by = -log(step_size)))
+  vlim_lower <- center - vchange
+  vlim_upper <- center + vchange
   
   vval_lower <- f(vlim_lower, ...)
   if(any(vval_lower < 0))

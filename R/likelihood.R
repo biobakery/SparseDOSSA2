@@ -1,22 +1,24 @@
 dx <- function(x, 
                pi0, mu, sigma, Omega,
+               offset_a = 1,
                control = list()) {
-  control <- do.call("integrate_control", control)
+  control <- do.call("control_integrate", control)
   
   ## FIXME
-  log_offset <- dloga(a = x,
+  log_offset <- dloga(a = a(x, offset_a),
                       pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
   
   int_limits <- get_intLimits(vintegrand_dx,
+                              center = log(offset_a),
                               limit_max = control$limit_max,
                               limit_min = control$limit_min,
                               step_size = control$step_size,
                               x = x, pi0 = pi0, mu = mu,
                               sigma = sigma, Omega = Omega,
                               log_offset = log_offset)
-
+  
   fit_integrate <- 
     integrate(vintegrand_dx,
               lower = int_limits[1], upper = int_limits[2], 
@@ -34,16 +36,16 @@ dx <- function(x,
     fit_integrate$value <- fit_integrate$value * exp(log_offset)
     fit_integrate$abs.error <- fit_integrate$abs.error * exp(log_offset)
   }
-    
+  
   if(control$only_value)
     return(fit_integrate$value)
   else
     return(fit_integrate)
 }
 
-integrate_control <- function(limit_max = 50,
+control_integrate <- function(limit_max = 50,
                               precBits = 100,
-                              limit_min = 0.1,
+                              limit_min = 1e-5,
                               step_size = 2,
                               rel.tol = 1e-6,
                               abs.tol = 0,
@@ -77,7 +79,7 @@ dloga <- function(a,
       sum((log(a[a > 0]) - mu[a > 0])^2 / (sigma[a > 0])^2 / 2) -
       log(2 * pi) / 2 * sum(a > 0) - sum(log(sigma[a > 0])) 
   }
-    
+  
   if(log)
     return(log_d)
   else
@@ -112,16 +114,18 @@ vintegrand_dx <- Vectorize(integrand_dx, vectorize.args = "log_asum")
 
 ea <- function(x, 
                pi0, mu, sigma, Omega,
+               offset_a = 1,
                control) {
-  control <- do.call("integrate_control", control)
+  control <- do.call("control_integrate", control)
   
   ## FIXME
-  log_offset <- dloga(a = x,
-                  pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  log_offset <- dloga(a = a(x, offset_a),
+                      pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
   
   int_limits <- get_intLimits(vintegrand_ea, 
+                              center = log(offset_a),
                               limit_max = control$limit_max, 
                               limit_min = control$limit_min,
                               step_size = control$step_size,

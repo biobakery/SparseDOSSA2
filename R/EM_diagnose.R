@@ -55,6 +55,20 @@ EM_diagnose <- function(data,
                     control = c(control$control_numint, 
                                 list(only_value = FALSE,
                                      proper = FALSE)))
+          eloga_num <- eloga(x = data[i_sample, , drop = TRUE],
+                             pi0 = params$pi0, mu = params$mu, 
+                             sigma = params$sigma, Omega = params$Omega,
+                             offset_a = offset_a,
+                             control = c(control$control_numint, 
+                                         list(only_value = FALSE,
+                                              proper = FALSE)))
+          eloga2_num <- eloga2(x = data[i_sample, , drop = TRUE],
+                               pi0 = params$pi0, mu = params$mu, 
+                               sigma = params$sigma, Omega = params$Omega,
+                               offset_a = offset_a,
+                               control = c(control$control_numint, 
+                                           list(only_value = FALSE,
+                                                proper = FALSE)))
           denom <- dx(x = data[i_sample, , drop = TRUE],
                       pi0 = params$pi0, mu = params$mu, 
                       sigma = params$sigma, Omega = params$Omega,
@@ -62,10 +76,18 @@ EM_diagnose <- function(data,
                       control = c(control$control_numint, 
                                   list(only_value = FALSE,
                                        proper = FALSE)))
+          l <- log_dx(x = data[i_sample, , drop = TRUE],
+                      pi0 = params$pi0, mu = params$mu,
+                      sigma = params$sigma, Omega = params$Omega,
+                      offset_a = offset_a,
+                      control = control$control_numint)
           return(c("mean" = num$value / denom$value,
                    "error" = abs(num$abs.error / denom$value) + 
                      abs(num$value / (denom$value)^2 * 
-                           denom$abs.error)))
+                           denom$abs.error),
+                   "l" = l,
+                   "eloga" = eloga_num$value / denom$value,
+                   "eloga2" = eloga2_num$value / denom$value))
         })
     }
     doParallel::stopImplicitCluster()
@@ -73,7 +95,10 @@ EM_diagnose <- function(data,
     
     ## M step
     a_data <- (data * e_asums[, 1])[!is.na(e_asums[, 1]), ] ## FIXME
-    fit_sigmas <- get_sigmas(a_data, params$mu)
+    fit_sigmas <- get_sigmas(x = data, 
+                             eloga = e_asums[, "eloga"], 
+                             eloga2 = e_asums[, "eloga2"], 
+                             mu = fit_marginals[, 2])
     fit_copulasso <- copulasso(data = a_data, 
                                lambda_list = control$lambda,
                                K_CV = NULL, ## FIXME
@@ -89,7 +114,9 @@ EM_diagnose <- function(data,
                    },
                    0.0)
     
-    ll_params[[i_iter]] <- c(params_new, list("diff" = diff))
+    ll_params[[i_iter]] <- c(params_new,
+                             list("diff" = diff,
+                                  l = sum(ll_easums[[i_iter]][, 3])))
     params <- params_new
   }
   

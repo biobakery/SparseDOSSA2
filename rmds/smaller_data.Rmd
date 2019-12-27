@@ -56,12 +56,13 @@ time <- Sys.time()
 fit_EM_numint <- 
   SparseDOSSA2:::EM_diagnose(
     data = mat_X,
-    control = list(maxit = 20,
+    control = list(ncores = 3,
+                   maxit = 5,
                    method = "numint",
                    verbose = TRUE,
                    control_numint = list(limit_min = 1e-14,
-                                         rel.tol = 1e-6,
-                                         abs.tol = 0,
+                                         rel.tol = 1e-4,
+                                         abs.tol = 1e-8,
                                          subdivisions = 1000)))
 print(Sys.time() - time)
 save(fit_EM_numint, file = "../results/EM_diagnostics/numint.RData")

@@ -43,6 +43,43 @@ dx <- function(x,
     return(fit_integrate)
 }
 
+log_dx <- function(x, 
+                   pi0, mu, sigma, Omega,
+                   offset_a,
+                   control = list()) {
+  control <- do.call("control_integrate", control)
+  
+  log_offset <- 
+    SparseDOSSA2:::dloga(a = a(x, offset_a),
+                         pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  if(log_offset == -Inf) 
+    return(-Inf)
+  
+  int_limits <- get_intLimits(vintegrand_dx,
+                              center = log(offset_a),
+                              limit_max = control$limit_max,
+                              limit_min = control$limit_min,
+                              step_size = control$step_size,
+                              x = x, pi0 = pi0, mu = mu,
+                              sigma = sigma, Omega = Omega,
+                              log_offset = log_offset)
+  
+  fit_integrate <- 
+    integrate(vintegrand_dx,
+              lower = int_limits[1], upper = int_limits[2], 
+              rel.tol = control$rel.tol, abs.tol = control$abs.tol,
+              subdivisions = control$subdivisions,
+              x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+              log_offset = log_offset)
+  
+  if(control$jacobian) {
+    fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
+    fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+  }
+  
+  return(log(fit_integrate$value) + log_offset)
+}
+
 control_integrate <- function(limit_max = 50,
                               precBits = 100,
                               limit_min = 1e-5,
@@ -169,6 +206,122 @@ integrand_ea <- function(log_asum, x,
 
 vintegrand_ea <- Vectorize(integrand_ea, 
                            vectorize.args = "log_asum")
+
+eloga <- function(x, 
+                  pi0, mu, sigma, Omega,
+                  offset_a = 1,
+                  control) {
+  control <- do.call("control_integrate", control)
+  
+  ## FIXME
+  log_offset <- dloga(a = a(x, offset_a),
+                      pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  if(log_offset == -Inf) 
+    stop("Something went wrong!")
+  
+  int_limits <- get_intLimits(vintegrand_ea, 
+                              center = log(offset_a),
+                              limit_max = control$limit_max, 
+                              limit_min = control$limit_min,
+                              step_size = control$step_size,
+                              x = x, pi0 = pi0, mu = mu, 
+                              sigma = sigma, Omega = Omega,
+                              log_offset = log_offset)
+  
+  fit_integrate <- 
+    integrate(vintegrand_eloga,
+              subdivisions = control$subdivisions,
+              rel.tol = .Machine$double.eps^0.5,
+              abs.tol = 0,
+              lower = int_limits[1], upper = int_limits[2],
+              x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega, 
+              log_offset = log_offset)  
+  
+  if(control$jacobian) {
+    fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
+    fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+  }
+  
+  if(control$proper) {
+    fit_integrate$value <- fit_integrate$value * exp(log_offset)
+    fit_integrate$abs.error <- fit_integrate$abs.error * exp(log_offset)
+  }
+  
+  if(control$only_value)
+    return(fit_integrate$value)
+  else
+    return(fit_integrate)
+}
+
+integrand_eloga <- function(log_asum, x, 
+                            pi0, mu, sigma, Omega, 
+                            log_offset) {
+  exp(dloga(a = a(x, exp(log_asum)),
+            pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+            log = TRUE) - 
+        log_offset) * log_asum
+}
+
+vintegrand_eloga <- Vectorize(integrand_eloga, 
+                              vectorize.args = "log_asum")
+
+eloga2 <- function(x, 
+                   pi0, mu, sigma, Omega,
+                   offset_a = 1,
+                   control) {
+  control <- do.call("control_integrate", control)
+  
+  ## FIXME
+  log_offset <- dloga(a = a(x, offset_a),
+                      pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  if(log_offset == -Inf) 
+    stop("Something went wrong!")
+  
+  int_limits <- get_intLimits(vintegrand_ea, 
+                              center = log(offset_a),
+                              limit_max = control$limit_max, 
+                              limit_min = control$limit_min,
+                              step_size = control$step_size,
+                              x = x, pi0 = pi0, mu = mu, 
+                              sigma = sigma, Omega = Omega,
+                              log_offset = log_offset)
+  
+  fit_integrate <- 
+    integrate(vintegrand_eloga2,
+              subdivisions = control$subdivisions,
+              rel.tol = .Machine$double.eps^0.5,
+              abs.tol = 0,
+              lower = int_limits[1], upper = int_limits[2],
+              x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega, 
+              log_offset = log_offset)  
+  
+  if(control$jacobian) {
+    fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
+    fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+  }
+  
+  if(control$proper) {
+    fit_integrate$value <- fit_integrate$value * exp(log_offset)
+    fit_integrate$abs.error <- fit_integrate$abs.error * exp(log_offset)
+  }
+  
+  if(control$only_value)
+    return(fit_integrate$value)
+  else
+    return(fit_integrate)
+}
+
+integrand_eloga2 <- function(log_asum, x, 
+                             pi0, mu, sigma, Omega, 
+                             log_offset) {
+  exp(dloga(a = a(x, exp(log_asum)),
+            pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+            log = TRUE) - 
+        log_offset) * log_asum^2
+}
+
+vintegrand_eloga2 <- Vectorize(integrand_eloga2, 
+                               vectorize.args = "log_asum")
 # integrand_num_asum <- function(log_asum, x, params) {
 #   asum <- exp(log_asum)
 #   u <- a_to_u(a(x, asum), 

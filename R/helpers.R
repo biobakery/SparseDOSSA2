@@ -65,11 +65,13 @@ a <- function(x, asum) {
   return(a)
 }
 
-get_sigmas <- function(data, mu) {
-  vapply(seq_len(ncol(data)),
-         function(i_sample) {
-           sqrt(mean((log((data[, i_sample])[data[, i_sample] > 0]) - 
-                        mu[i_sample])^2))
+get_sigmas <- function(x, eloga, eloga2, mu) {
+  vapply(seq_len(ncol(x)),
+         function(i_feature) {
+           ind_samples <- x[, i_feature] > 0
+           sqrt(mean((log(x[ind_samples, i_feature]) + eloga[ind_samples] - 
+                        mu[i_feature])^2 +
+                       eloga2[ind_samples] - (eloga[ind_samples])^2))
          },
          0.0)
 }

@@ -14,6 +14,5 @@ Depends:
   ks,
   copula,
   mvtnorm,
-  Rmpfr
 Suggests: 
     testthat (>= 2.1.0)

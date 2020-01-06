@@ -57,22 +57,22 @@ mat_X <- t(apply(mat_X_count, 1, function(x) x / sum(x)))
 
 ```{r EM_numint, echo=FALSE}
 load("../results/compare_likelihood/tb_lambda.RData")
-# time <- Sys.time()
-# fit_EM_outer <-
-#   SparseDOSSA2:::EM_diagnose(
-#     data = mat_X[tb_lambda$samples_outer[[i]] != tb_lambda$k_outer[i], ],
-#     control = list(ncores = 45,
-#                    maxit = 30,
-#                    method = "numint",
-#                    verbose = FALSE,
-#                    control_numint = list(limit_min = 1e-14,
-#                                          rel.tol = 1e-4,
-#                                          abs.tol = 1e-8,
-#                                          subdivisions = 1000)))
-# print(Sys.time() - time)
-# save(fit_EM_outer, file =
-#        paste0("../results/compare_likelihood/SparseDOSSA2_outer_",
-#               i, ".RData"))
+time <- Sys.time()
+fit_EM_outer <-
+  SparseDOSSA2:::EM_diagnose(
+    data = mat_X[tb_lambda$samples_outer[[i]] != tb_lambda$k_outer[i], ],
+    control = list(ncores = 45,
+                   maxit = 30,
+                   method = "numint",
+                   verbose = FALSE,
+                   control_numint = list(limit_min = 1e-14,
+                                         rel.tol = 1e-4,
+                                         abs.tol = 1e-8,
+                                         subdivisions = 1000)))
+print(Sys.time() - time)
+save(fit_EM_outer, file =
+       paste0("../results/compare_likelihood/SparseDOSSA2_outer_",
+              i, ".RData"))
 load(paste0("../results/compare_likelihood/SparseDOSSA2_outer_",
               i, ".RData"))
 ```

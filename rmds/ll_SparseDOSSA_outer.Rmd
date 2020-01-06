@@ -56,7 +56,7 @@ load("../results/compare_likelihood/tb_simulation.RData")
 # Run numerical integration based EM
 
 ```{r EM_numint, echo=FALSE}
-# load("../results/compare_likelihood/tb_lambda.RData")
+load("../results/compare_likelihood/tb_lambda.RData")
 # time <- Sys.time()
 # fit_EM_outer <-
 #   SparseDOSSA2:::EM_diagnose(

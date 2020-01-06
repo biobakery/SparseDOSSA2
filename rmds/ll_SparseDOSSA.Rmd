@@ -66,4 +66,6 @@ print(Sys.time() - time)
 save(fit_EM, file = 
        paste0("../results/compare_likelihood/SparseDOSSA2_",
               i, ".RData"))
+plot(1:30, fit_EM$ll_params %>% purrr::map_dbl("l"))
+plot(1:30, fit_EM$ll_params %>% purrr::map_dbl(~.x$diff[1]))
 ```

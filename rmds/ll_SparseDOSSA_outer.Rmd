@@ -1,5 +1,5 @@
 ---
-  title: "Evaluation of SparseDOSSA2 Likelihoods"
+title: "Evaluation of SparseDOSSA2 Likelihoods"
 author: "Siyuan Ma"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document

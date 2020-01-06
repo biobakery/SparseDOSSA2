@@ -73,8 +73,8 @@ load("../results/compare_likelihood/tb_simulation.RData")
 # save(fit_EM_outer, file =
 #        paste0("../results/compare_likelihood/SparseDOSSA2_outer_",
 #               i, ".RData"))
-# load(paste0("../results/compare_likelihood/SparseDOSSA2_outer_",
-#               i, ".RData"))
+load(paste0("../results/compare_likelihood/SparseDOSSA2_outer_",
+              i, ".RData"))
 ```
 
 ```{r evaluate likelihood}

@@ -77,12 +77,13 @@ fit_param <- fit_EM$ll_params[[length(fit_EM$ll_params)]]
 doParallel::registerDoParallel(cores = 22)
 ll <- foreach::`%dopar%`(
   foreach::foreach(
-    i_sample = seq_len(sum(tb_simulation$samples_inner[[i]] == k_inner)),
+    i_sample = seq_len(sum(tb_simulation$samples_inner[[i]] == 
+                             tb_simulation$k_inner[i])),
     .combine = c),
   {
     x <- mat_X %>% 
-      `[`(tb_simulation$samples_outer[[i]] != k_outer, ) %>% 
-      `[`(tb_simulation$samples_inner[[i]] == k_inner, ) %>% 
+      `[`(tb_simulation$samples_outer[[i]] != tb_simulation$k_outer[i], ) %>% 
+      `[`(tb_simulation$samples_inner[[i]] == tb_simulation$k_inner[i], ) %>% 
       `[`(i_sample, )
     
     try(SparseDOSSA2:::log_dx(x = x, 

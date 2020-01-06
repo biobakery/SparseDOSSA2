@@ -1,0 +1,100 @@
+---
+  title: "Evaluation of SparseDOSSA2 Likelihoods"
+author: "Siyuan Ma"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "../")
+library(magrittr)
+library(ggplot2)
+```
+
+```{r load data, include=FALSE}
+load("../data/physeqs/genera.RData")
+physeq <- physeq_genera %>% 
+  phyloseq::subset_samples(dataset_name == "MucosalIBD") %>% 
+  smar::prune_taxaSamples(flist_taxa = genefilter::kOverA(k = 5, A = 1))
+mat_X_count <- t(smar::otu_table2(physeq))
+colnames(mat_X_count) <- CRTmicrobiome:::simplify_feature(colnames(mat_X_count))
+mat_X <- t(apply(mat_X_count, 1, function(x) x / sum(x)))
+```
+
+```{r pick optimal lambda}
+dir.create("../results/compare_likelihood/", recursive = TRUE,
+           showWarnings = FALSE)
+load("../results/compare_likelihood/tb_simulation.RData")
+l_ll <- list()
+for(i in seq_len(nrow(tb_simulation))) {
+  load(paste0("../results/compare_likelihood/ll_SparseDOSSA2_", i, ".RData"))
+  l_ll[[i]] <- ll
+}
+tb_simulation <- tb_simulation %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(i = seq_len(nrow(tb_simulation))) %>% 
+  dplyr::mutate(l_ll = l_ll) %>% 
+  dplyr::group_by(i) %>% 
+  dplyr::mutate(ll = ifelse(class(l_ll[[1]]) == "character",
+                            l_ll[[1]] %>% as.numeric() %>% 
+                              setdiff(-Inf) %>% mean(na.rm = TRUE),
+                            l_ll[[1]] %>% setdiff(-Inf) %>% mean))
+tb_lambda <- tb_simulation %>% 
+  dplyr::group_by(k_outer, lambdas) %>% 
+  dplyr::summarise(ll_cv = mean(ll)) %>% 
+  dplyr::group_by(k_outer) %>% 
+  dplyr::arrange(-ll_cv) %>% 
+  dplyr::summarise(best_lambda = lambdas[1])
+tb_lambda <- tb_simulation %>% 
+  dplyr::filter(!duplicated(k_inner), !duplicated(lambdas)) %>% 
+  dplyr::select(k_outer, samples_outer) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::left_join(tb_lambda, by = "k_outer")
+save(tb_lambda, file = "../results/compare_likelihood/tb_lambda.RData")
+```
+
+# Run numerical integration based EM
+
+```{r EM_numint, echo=FALSE}
+load("../results/compare_likelihood/tb_lambda.RData")
+time <- Sys.time()
+fit_EM_outer <-
+  SparseDOSSA2:::EM_diagnose(
+    data = mat_X[tb_lambda$samples_outer[[i]] != tb_lambda$k_outer[i], ],
+    control = list(ncores = 45,
+                   maxit = 30,
+                   method = "numint",
+                   verbose = FALSE,
+                   control_numint = list(limit_min = 1e-14,
+                                         rel.tol = 1e-4,
+                                         abs.tol = 1e-8,
+                                         subdivisions = 1000)))
+print(Sys.time() - time)
+save(fit_EM_outer, file =
+       paste0("../results/compare_likelihood/SparseDOSSA2_outer_",
+              i, ".RData"))
+```
+
+```{r evaluate likelihood}
+fit_param <- fit_EM_outer$ll_params[[length(fit_EM$ll_params)]]
+doParallel::registerDoParallel(cores = 45)
+ll <- foreach::`%dopar%`(
+  foreach::foreach(
+    i_sample = seq_len(sum(tb_lambda$samples_outer[[i]] == 
+                             tb_lambda$k_outer[i])),
+    .combine = c),
+  {
+    x <- mat_X %>% 
+      `[`(tb_simulation$samples_outer[[i]] == tb_simulation$k_outer[i], ) %>% 
+      `[`(i_sample, )
+    
+    try(SparseDOSSA2:::log_dx(x = x, 
+                              pi0 = fit_param$pi0, mu = fit_param$mu,
+                              sigma = fit_param$sigma, Omega = fit_param$Omega,
+                              offset_a = 1,
+                              control = list(jacobian = TRUE)))
+  })
+doParallel::stopImplicitCluster()
+save(ll, file = paste0("../results/compare_likelihood/ll_SparseDOSSA2_outer_",
+                       i, ".RData"))
+```

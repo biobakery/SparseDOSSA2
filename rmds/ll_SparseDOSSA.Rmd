@@ -63,7 +63,7 @@ fit_EM <-
                                          abs.tol = 1e-8,
                                          subdivisions = 1000)))
 print(Sys.time() - time)
-save(fit_EM_, file = 
+save(fit_EM, file = 
        paste0("../results/compare_likelihood/SparseDOSSA2",
               i, ".RData"))
 ```

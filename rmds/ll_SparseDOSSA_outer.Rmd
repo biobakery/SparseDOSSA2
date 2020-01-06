@@ -76,7 +76,7 @@ save(fit_EM_outer, file =
 ```
 
 ```{r evaluate likelihood}
-fit_param <- fit_EM_outer$ll_params[[length(fit_EM$ll_params)]]
+fit_param <- fit_EM_outer$ll_params[[length(fit_EM_outer$ll_params)]]
 doParallel::registerDoParallel(cores = 45)
 ll <- foreach::`%dopar%`(
   foreach::foreach(

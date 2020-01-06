@@ -65,7 +65,7 @@ Sys.time() - time
 save(df_dx, file = "../results/check_likelihood/df_dx.RData")
 ```
 ```{r plotting}
-# df_plot <- df_dx %>% dplyr::filter(l > -20)
+df_plot <- df_dx %>% dplyr::filter(l > -20)
 df_plot %>% 
   ggplot(aes(x = log(sigma1), 
              y = log(sigma2),

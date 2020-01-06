@@ -322,6 +322,42 @@ integrand_eloga2 <- function(log_asum, x,
 
 vintegrand_eloga2 <- Vectorize(integrand_eloga2, 
                                vectorize.args = "log_asum")
+
+log_intx_dc <- function(data, zero_inflation = TRUE) {
+  lgamma_data <- lgamma(data + 1)
+  if(!zero_inflation) {
+    lgamma_sum <- lgamma(apply(data + 1, 1, sum))
+    sum(lgamma_sum) - sum(lgamma_data)
+  } else {
+    lgamma_sum <- lgamma(apply(data, 1, function(x) sum(x[x > 0] + 1)))
+    sum(lgamma_sum) - sum(lgamma_data[data > 0])
+  }
+}
+
+ddirichlet <- function (x, alpha, log = TRUE) 
+{
+  
+  if (!is.matrix(x)) {
+    if (is.data.frame(x)) 
+      x <- as.matrix(x)
+  }
+  
+  if (!is.matrix(alpha)) 
+    alpha <- matrix(alpha, ncol = length(alpha), nrow = nrow(x), 
+                    byrow = TRUE)
+  if (any(dim(x) != dim(alpha))) 
+    stop("Mismatch between dimensions of x and alpha in ddirichlet().\n")
+  pd <- vector(length = nrow(x))
+  for (i in 1:nrow(x)) pd[i] <- ddirichlet1(x[i, ], alpha[i, ])
+  if(!log) pd <- exp(pd)
+  return(pd)
+}
+
+ddirichlet1 <- function(x, alpha) {
+  logD <- sum(lgamma(alpha)) - lgamma(sum(alpha))
+  s <- sum((alpha - 1) * log(x))
+  sum(s) - logD
+}
 # integrand_num_asum <- function(log_asum, x, params) {
 #   asum <- exp(log_asum)
 #   u <- a_to_u(a(x, asum), 

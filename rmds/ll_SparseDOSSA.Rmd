@@ -55,7 +55,7 @@ fit_EM <-
   SparseDOSSA2:::EM_diagnose(
     data = mat_X[tb_simulation$samples[[i]], ],
     control = list(ncores = 45,
-                   maxit = 20,
+                   maxit = 30,
                    method = "numint",
                    verbose = FALSE,
                    control_numint = list(limit_min = 1e-14,
@@ -64,6 +64,6 @@ fit_EM <-
                                          subdivisions = 1000)))
 print(Sys.time() - time)
 save(fit_EM, file = 
-       paste0("../results/compare_likelihood/SparseDOSSA2",
+       paste0("../results/compare_likelihood/SparseDOSSA2_",
               i, ".RData"))
 ```

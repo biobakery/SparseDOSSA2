@@ -85,6 +85,7 @@ get_intLimits <- function(f,
   vlim_lower <- center - vchange
   vlim_upper <- center + vchange
   
+  vlim_lower <- vlim_lower[exp(vlim_lower) > 0] ## FIXME??
   vval_lower <- f(vlim_lower, ...)
   if(any(vval_lower < 0))
     stop("There are negative values of f!")
@@ -93,8 +94,7 @@ get_intLimits <- function(f,
     if(vflag_lower[1])
       stop("f is already positive at maximum lower limit!")
     lower <- vlim_lower[c(vflag_lower[-1], TRUE)][1]
-  }
-  else {
+  } else {
     warning("No positive f value for lower limits!")
     lower <- vlim_lower[length(vlim_lower)]
   }
@@ -107,8 +107,7 @@ get_intLimits <- function(f,
     if(vflag_upper[1])
       stop("f is already positive at maximum upper limit!")
     upper <- vlim_upper[c(vflag_upper[-1], TRUE)][1]
-  }
-  else {
+  } else {
     warning("No positive f value for upper limits!")
     upper <- vlim_upper[length(vlim_upper)]
   }

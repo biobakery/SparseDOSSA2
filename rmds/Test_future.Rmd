@@ -1,0 +1,36 @@
+---
+title: "Test future for more consistent implementation of parallelization"
+author: "Siyuan Ma"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(magrittr)
+library(ggplot2)
+```
+
+```{r batch - multicore}
+list(future.batchtools::batchtools_slurm %>% 
+       future::tweak(resources = 
+                       list(ncpus = 45,
+                            partition = "janson_cascade",
+                            walltime = 3600 * 24,
+                            memory = 4048),
+                     template = "slurm-simple"),
+     future::multiprocess) %>% 
+  future::plan()
+
+test <- future.apply::future_lapply(
+  1:8, 
+  function(i_job)
+    future.apply::future_lapply(
+      1:47, 
+      function(i_task)
+        paste(i_job,
+              Sys.info()["nodename"],
+              i_task,
+              Sys.getpid(), sep = ":")
+    )
+)
+```

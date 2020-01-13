@@ -21,16 +21,23 @@ list(future.batchtools::batchtools_slurm %>%
      future::multiprocess) %>% 
   future::plan()
 
-test <- future.apply::future_lapply(
-  1:8, 
-  function(i_job)
-    future.apply::future_lapply(
-      1:47, 
-      function(i_task)
-        paste(i_job,
-              Sys.info()["nodename"],
-              i_task,
-              Sys.getpid(), sep = ":")
-    )
-)
+time <- Sys.time()
+for(i_job in 1) 
+  test <- future::future({
+    l_test <- list()
+    for(i_step in 1:5) 
+      l_test[[i_step]] <-
+        future.apply::future_sapply(
+          1:45,
+          function(i_task) {
+            Sys.sleep(0.5)
+            paste(i_job,
+                  Sys.info()["nodename"],
+                  i_task,
+                  Sys.getpid(), sep = ":")
+          })
+    l_test
+  })
+test <- future::value(test)
+Sys.time() - time
 ```

@@ -4,10 +4,9 @@ EM_diagnose <- function(data,
   
   # Initialize using relative abundances
   fit_marginals <- get_marginals(data)
-  time1 <- system.time(fit_copulasso <- copulasso(data = data, 
-                                                  lambda_list = control$lambda,
-                                                  K_CV = NULL) ## FIXME
-  )
+  fit_copulasso <- copulasso(data = data, 
+                             lambda_list = control$lambda,
+                             K_CV = NULL) ## FIXME
   params <- list(pi0 = fit_marginals[, 1],
                  mu = fit_marginals[,2],
                  sigma = fit_marginals[, 3],
@@ -41,56 +40,54 @@ EM_diagnose <- function(data,
         })
     }
     if(control$method == "numint") {
-      time2 <- system.time(
-        e_asums <- future.apply::future_vapply(
-          seq_len(nrow(data)),
-          function(i_sample) {
-            if(i_iter == 1) offset_a <- 1
-            else offset_a <- ll_easums[[i_iter - 1]][i_sample, 1]
-            num <- ea(x = data[i_sample, , drop = TRUE],
-                      pi0 = params$pi0, mu = params$mu, 
-                      sigma = params$sigma, Omega = params$Omega,
-                      offset_a = offset_a,
-                      control = c(control$control_numint, 
-                                  list(only_value = FALSE,
-                                       proper = FALSE)))
-            eloga_num <- eloga(x = data[i_sample, , drop = TRUE],
+      e_asums <- future.apply::future_vapply(
+        seq_len(nrow(data)),
+        function(i_sample) {
+          if(i_iter == 1) offset_a <- 1
+          else offset_a <- ll_easums[[i_iter - 1]][i_sample, 1]
+          num <- ea(x = data[i_sample, , drop = TRUE],
+                    pi0 = params$pi0, mu = params$mu, 
+                    sigma = params$sigma, Omega = params$Omega,
+                    offset_a = offset_a,
+                    control = c(control$control_numint, 
+                                list(only_value = FALSE,
+                                     proper = FALSE)))
+          eloga_num <- eloga(x = data[i_sample, , drop = TRUE],
+                             pi0 = params$pi0, mu = params$mu, 
+                             sigma = params$sigma, Omega = params$Omega,
+                             offset_a = offset_a,
+                             control = c(control$control_numint, 
+                                         list(only_value = FALSE,
+                                              proper = FALSE)))
+          eloga2_num <- eloga2(x = data[i_sample, , drop = TRUE],
                                pi0 = params$pi0, mu = params$mu, 
                                sigma = params$sigma, Omega = params$Omega,
                                offset_a = offset_a,
                                control = c(control$control_numint, 
                                            list(only_value = FALSE,
                                                 proper = FALSE)))
-            eloga2_num <- eloga2(x = data[i_sample, , drop = TRUE],
-                                 pi0 = params$pi0, mu = params$mu, 
-                                 sigma = params$sigma, Omega = params$Omega,
-                                 offset_a = offset_a,
-                                 control = c(control$control_numint, 
-                                             list(only_value = FALSE,
-                                                  proper = FALSE)))
-            denom <- dx(x = data[i_sample, , drop = TRUE],
-                        pi0 = params$pi0, mu = params$mu, 
-                        sigma = params$sigma, Omega = params$Omega,
-                        offset_a = offset_a,
-                        control = c(control$control_numint, 
-                                    list(only_value = FALSE,
-                                         proper = FALSE)))
-            l <- log_dx(x = data[i_sample, , drop = TRUE],
-                        pi0 = params$pi0, mu = params$mu,
-                        sigma = params$sigma, Omega = params$Omega,
-                        offset_a = offset_a,
-                        control = control$control_numint)
-            return(c("mean" = num$value / denom$value,
-                     "error" = abs(num$abs.error / denom$value) + 
-                       abs(num$value / (denom$value)^2 * 
-                             denom$abs.error),
-                     "l" = l,
-                     "eloga" = eloga_num$value / denom$value,
-                     "eloga2" = eloga2_num$value / denom$value))
-          },
-          rep(0.0, 5)
-        ) %>% t()
-      )
+          denom <- dx(x = data[i_sample, , drop = TRUE],
+                      pi0 = params$pi0, mu = params$mu, 
+                      sigma = params$sigma, Omega = params$Omega,
+                      offset_a = offset_a,
+                      control = c(control$control_numint, 
+                                  list(only_value = FALSE,
+                                       proper = FALSE)))
+          l <- log_dx(x = data[i_sample, , drop = TRUE],
+                      pi0 = params$pi0, mu = params$mu,
+                      sigma = params$sigma, Omega = params$Omega,
+                      offset_a = offset_a,
+                      control = control$control_numint)
+          return(c("mean" = num$value / denom$value,
+                   "error" = abs(num$abs.error / denom$value) + 
+                     abs(num$value / (denom$value)^2 * 
+                           denom$abs.error),
+                   "l" = l,
+                   "eloga" = eloga_num$value / denom$value,
+                   "eloga2" = eloga2_num$value / denom$value))
+        },
+        rep(0.0, 5)
+      ) %>% t()
     }
     ll_easums[[i_iter]] <- e_asums
     
@@ -100,11 +97,9 @@ EM_diagnose <- function(data,
                              eloga = e_asums[, "eloga"], 
                              eloga2 = e_asums[, "eloga2"], 
                              mu = fit_marginals[, 2])
-    time3 <- system.time(
-      fit_copulasso <- copulasso(data = a_data, 
-                                 lambda_list = control$lambda,
-                                 K_CV = NULL) ## FIXME
-    )
+    fit_copulasso <- copulasso(data = a_data, 
+                               lambda_list = control$lambda,
+                               K_CV = NULL) ## FIXME
     params_new <- list(pi0 = fit_marginals[, 1],
                        mu = fit_marginals[, 2],
                        sigma = fit_sigmas,
@@ -118,12 +113,11 @@ EM_diagnose <- function(data,
     
     ll_params[[i_iter]] <- c(params_new,
                              list("diff" = diff,
-                                  l = sum(ll_easums[[i_iter]][, 3])),
-                             list(time2, time3))
+                                  l = sum(ll_easums[[i_iter]][, 3])))
     params <- params_new
   }
   
-  return(list(ll_easums = ll_easums, ll_params = ll_params, time1 = time1))
+  return(list(ll_easums = ll_easums, ll_params = ll_params))
 }
 
 control_EM <- function(lambda = 0.2,

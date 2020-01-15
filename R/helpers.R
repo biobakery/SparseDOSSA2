@@ -114,3 +114,18 @@ get_intLimits <- function(f,
   
   return(c(lower, upper))
 }
+
+get_diff <- function(x, x_old, 
+                     denom_c = 1e-5,
+                     method = "abs") {
+  x <- as.vector(x)
+  x_old <- as.vector(x_old)
+  
+  abs_diff <- abs(x - x_old)
+  if(method == "abs")
+    return(max(abs_diff))
+  if(method == "rel") {
+    rel_diff <- abs_diff / (abs(x) + denom_c)
+    return(max(rel_diff))
+  }
+}

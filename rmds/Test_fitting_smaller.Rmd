@@ -3,38 +3,36 @@ title: "Test_fitting"
 author: "Siyuan Ma"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
-editor_options: 
-  chunk_output_type: console
 ---
-
+  
 ```{r setup, include=FALSE}
 dir_project <- "/n/hutlab11_nobackup/users/syma/sparsedossa_update/"
 knitr::opts_knit$set(root.dir = dir_project)
 library(magrittr)
 library(ggplot2)
-dir_output <- paste0(dir_project, "results/Test_fitting/")
+dir_output <- paste0(dir_project, "results/Test_fitting/smaller/")
 dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 ```
 
 ```{r setup cluster parameter}
-ncpus <- 45
-partition <- "janson_cascade"
-# batchtools::makeRegistry(file.dir = "reg/Test_fitting", packages = "magrittr")
-batchtools::loadRegistry(file.dir = "reg/Test_fitting", writeable = TRUE)
-batchtools::clearRegistry()
+ncpus <- 20
+# partition <- "janson_cascade"
+# # batchtools::makeRegistry(file.dir = "reg/Test_fitting", packages = "magrittr")
+# batchtools::loadRegistry(file.dir = "reg/Test_fitting", writeable = TRUE)
+# batchtools::clearRegistry()
 ```
 
 ```{r set up simulation grid}
 tb_simulation <- tidyr::crossing(
-  p = c(3, 5, 10),
-  pi0 = c(0, 0.25, 0.5, 0.75),
+  p = c(3),
+  pi0 = c(0, 0.25),
   mu = c(0),
   sigma = c(1),
   Sigma_diag = c(1),
-  Sigma_off_diag = c(0, 0.25, -0.25),
-  n = c(10000),
+  Sigma_off_diag = c(0),
+  n = c(1000),
   n_r = c(10000),
-  lambda = exp(seq(log(1e-5), log(10), length.out = 20)),
+  lambda = exp(seq(log(1e-3), log(1), length.out = 5)),
   maxit = 30
 ) %>% 
   dplyr::mutate(i_setup = 1:(dplyr::n())) %>% 
@@ -79,7 +77,7 @@ one_job <- function(i_job) {
   save(fit_EM, file = paste0(dir_output, "fit_EM_", i_job, ".RData"))
   
   ## Evaluate compositional variable parameters
-  a_samples <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n, 
+  a_samples <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n_r, 
                                          pi0 = params_truth$pi0, 
                                          mu = params_truth$mu, 
                                          sigma = params_truth$sigma,
@@ -87,7 +85,7 @@ one_job <- function(i_job) {
   a_samples <- a_samples[!apply(a_samples == 0, 1, all), ]
   x_samples <- apply(a_samples, 2, function(x) x / sum(x))
   params_fit <- fit_EM$ll_params[[i_tb_simulation$maxit]]
-  a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n, 
+  a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n_r, 
                                                       pi0 = params_fit$pi0, 
                                                       mu = params_fit$mu, 
                                                       sigma = params_fit$sigma,
@@ -109,9 +107,49 @@ one_job <- function(i_job) {
 ```
 
 ```{r submit job}
-tb_ids <- batchtools::batchMap(one_job, 
-                               i_job = seq_len(njobs))
-# one_test <- batchtools::testJob(id = 1)
-batchtools::batchExport(mget(ls()))
-batchtools::submitJobs(resources =  list(ncpus = ncpus, partition = "janson_cascade"))
+l_result <- list()
+for(i_job in seq_len(njobs)) {
+  l_result[[i_job]] <- one_job(i_job)
+}
+save(l_result, file = paste0(dir_output, "l_result.RData"))
+```
+
+```{r visualize}
+l_result <- list()
+for(i_job in 1:9) {
+  load(paste0(dir_output, "params_x_", i_job, ".RData"))
+  l_result[[i_job]] <- params_x
+}
+
+tb_simulation <- tb_simulation %>% 
+  dplyr::mutate(i_job = seq_len(nrow(tb_simulation)))
+tb_compare <- l_result %>% 
+  purrr::imap_dfr(
+    ~ .x %>% purrr::imap_dfr(
+      ~ .x %>% purrr::imap_dfr(
+        ~ tibble::tibble(value = as.vector(.x),
+                         param = .y)
+      ) %>% 
+        dplyr::mutate(class = .y)
+    ) %>% 
+      dplyr::mutate(i_job = .y)
+  ) %>% 
+  dplyr::left_join(tb_simulation, by = "i_job")
+
+l_plots <- unique(tb_compare$param) %>% 
+  purrr::map(function(i_param) {
+    tb_compare %>% 
+      dplyr::filter(param == i_param) %>% 
+      ggplot(aes(x = as.character(log(lambda)), 
+                  y = value,
+                  color = class)) +
+      geom_boxplot() +
+      facet_grid(.~pi0)
+  })
+
+for(i in seq_along(l_plots)) {
+  ggsave(filename = paste0(dir_output, "fig_", unique(tb_compare$param)[i], ".pdf"),
+         plot = l_plots[[i]],
+         width = 8, height = 4)
+}
 ```

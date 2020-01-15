@@ -1,0 +1,45 @@
+---
+title: "Test future for more consistent implementation of parallelization"
+author: "Siyuan Ma"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(magrittr)
+```
+
+```{r batch - multicore}
+get_sessionInfo <- function(id_job, id_task, pause = 0) {
+  Sys.sleep(pause)
+  paste(id_job,
+        Sys.info()["nodename"],
+        id_task,
+        Sys.getpid(), sep = ":")
+}
+  
+
+future.batchtools::batchtools_slurm %>% 
+  future::tweak(resources = 
+                  list(pm.backend = "mpi",
+                       ncpus = 3,
+                       partition = "janson_cascade",
+                       walltime = 2,
+                       memory = 4048),
+                template = "sma",
+                label = "test_future") %>% 
+  future::plan()
+
+test1 <- future.apply::future_lapply(
+  1:2,
+  function(i_job) {
+    # source("~/apps/R/R_3.6.1/Rmpi/Rprofile")
+    # paste(Sys.info()["nodename"],Rmpi::mpi.comm.rank(), sep = ":") 
+    library(parallel)
+    library(future)
+    cl <- makeClusterMPI(2)
+    stopCluster(cl)
+    stop()
+  }
+)
+```

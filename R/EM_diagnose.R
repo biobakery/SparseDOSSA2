@@ -6,14 +6,14 @@ EM_diagnose <- function(data,
   fit_marginals <- get_marginals(data)
   fit_copulasso <- copulasso(data = data, 
                              lambda_list = control$lambda,
-                             K_CV = NULL, ## FIXME
-                             ncores = control$ncores)
+                             K_CV = NULL) ## FIXME
   params <- list(pi0 = fit_marginals[, 1],
                  mu = fit_marginals[,2],
                  sigma = fit_marginals[, 3],
                  Omega = fit_copulasso$fits[[1]])
   
   i_iter <- 0
+  converge <- FALSE
   ll_easums <- list()
   ll_params <- list()
   while(TRUE) {
@@ -23,7 +23,6 @@ EM_diagnose <- function(data,
       print(i_iter)
     
     ## E step
-    doParallel::registerDoParallel(cores = control$ncores)
     if(control$method == "mcmc") {
       e_asums <- foreach::`%dopar%`(
         foreach::foreach(i_sample = seq_len(nrow(data)),
@@ -42,10 +41,9 @@ EM_diagnose <- function(data,
         })
     }
     if(control$method == "numint") {
-      e_asums <- foreach::`%dopar%`(
-        foreach::foreach(i_sample = seq_len(nrow(data)),
-                         .combine='rbind'),
-        {
+      e_asums <- future.apply::future_vapply(
+        seq_len(nrow(data)),
+        function(i_sample) {
           if(i_iter == 1) offset_a <- 1
           else offset_a <- ll_easums[[i_iter - 1]][i_sample, 1]
           num <- ea(x = data[i_sample, , drop = TRUE],
@@ -88,9 +86,10 @@ EM_diagnose <- function(data,
                    "l" = l,
                    "eloga" = eloga_num$value / denom$value,
                    "eloga2" = eloga2_num$value / denom$value))
-        })
+        },
+        rep(0.0, 5)
+      ) %>% t()
     }
-    doParallel::stopImplicitCluster()
     ll_easums[[i_iter]] <- e_asums
     
     ## M step
@@ -101,33 +100,44 @@ EM_diagnose <- function(data,
                              mu = fit_marginals[, 2])
     fit_copulasso <- copulasso(data = a_data, 
                                lambda_list = control$lambda,
-                               K_CV = NULL, ## FIXME
-                               ncores = control$ncores)
+                               K_CV = NULL) ## FIXME
     params_new <- list(pi0 = fit_marginals[, 1],
                        mu = fit_marginals[, 2],
                        sigma = fit_sigmas,
                        Omega = fit_copulasso$fits[[1]])
     
-    diff <- vapply(seq(from = 3, to = length(params_new)),
-                   function(i_param) {
-                     max(abs(params_new[[i_param]] - params[[i_param]]))
-                   },
-                   0.0)
+    diff_abs <- vapply(c(3, 4), 
+                       function(i_param)
+                         get_diff(params_new, params, 
+                                  denom_c = control$abs_tol, method = "abs"),
+                       0.0)
+    diff_rel <- vapply(c(3, 4), 
+                       function(i_param)
+                         get_diff(params_new, params, 
+                                  denom_c = control$abs_tol, method = "rel"),
+                       0.0)
     
     ll_params[[i_iter]] <- c(params_new,
-                             list("diff" = diff,
-                                  l = sum(ll_easums[[i_iter]][, 3])))
+                             list(diff = c(diff_abs, diff_rel),
+                                  l = mean(ll_easums[[i_iter]][, 3])))
     params <- params_new
+    
+    if(max(diff_abs) < control$abs_tol & max(diff_rel) < control$rel_tol) {
+      converge <- TRUE
+      break
+    }
   }
   
-  return(list(ll_easums = ll_easums, ll_params = ll_params))
+  return(list(ll_easums = ll_easums, ll_params = ll_params,
+              converge = list(converge = converge,
+                              n_iter = i_iter)))
 }
 
-control_EM <- function(ncores = 6,
-                       lambda = 0.2,
+control_EM <- function(lambda = 0.2,
                        maxit = 30,
-                       method = "mcmc",
-                       verbose = FALSE,
+                       method = "numint",
+                       rel_tol = 5e-2,
+                       abs_tol = 1e-4,
                        control_mcmc = list(R = 10000,
                                            burnin = 0.1),
                        control_numint = list(subdivisions = 10000,
@@ -135,12 +145,14 @@ control_EM <- function(ncores = 6,
                                              limit_min = 1e-10,
                                              step_size = 2,
                                              rel.tol = 1e-6,
-                                             abs.tol = 1e-6)) {
-  list(ncores = ncores,
-       lambda = lambda,
+                                             abs.tol = 1e-6),
+                       verbose = FALSE) {
+  list(lambda = lambda,
        maxit = maxit,
        method = method,
-       verbose = verbose,
+       rel_tol = rel_tol,
+       abs_tol = abs_tol,
        control_mcmc = control_mcmc,
-       control_numint = control_numint)
+       control_numint = control_numint,
+       verbose = verbose)
 }

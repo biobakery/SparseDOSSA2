@@ -119,7 +119,8 @@ EM_diagnose <- function(data,
     ll_params[[i_iter]] <- c(params_new,
                              list("diff" = diff,
                                   l = sum(ll_easums[[i_iter]][, 3])),
-                             list(time2, time3))
+                             list(time2 = time2, 
+                                  time3 = time3))
     params <- params_new
   }
   

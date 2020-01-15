@@ -6,8 +6,7 @@ EM_diagnose <- function(data,
   fit_marginals <- get_marginals(data)
   fit_copulasso <- copulasso(data = data, 
                              lambda_list = control$lambda,
-                             K_CV = NULL, ## FIXME
-                             ncores = control$ncores)
+                             K_CV = NULL) ## FIXME
   params <- list(pi0 = fit_marginals[, 1],
                  mu = fit_marginals[,2],
                  sigma = fit_marginals[, 3],
@@ -23,7 +22,6 @@ EM_diagnose <- function(data,
       print(i_iter)
     
     ## E step
-    doParallel::registerDoParallel(cores = control$ncores)
     if(control$method == "mcmc") {
       e_asums <- foreach::`%dopar%`(
         foreach::foreach(i_sample = seq_len(nrow(data)),
@@ -42,10 +40,9 @@ EM_diagnose <- function(data,
         })
     }
     if(control$method == "numint") {
-      e_asums <- foreach::`%dopar%`(
-        foreach::foreach(i_sample = seq_len(nrow(data)),
-                         .combine='rbind'),
-        {
+      e_asums <- future.apply::future_vapply(
+        seq_len(nrow(data)),
+        function(i_sample) {
           if(i_iter == 1) offset_a <- 1
           else offset_a <- ll_easums[[i_iter - 1]][i_sample, 1]
           num <- ea(x = data[i_sample, , drop = TRUE],
@@ -88,9 +85,10 @@ EM_diagnose <- function(data,
                    "l" = l,
                    "eloga" = eloga_num$value / denom$value,
                    "eloga2" = eloga2_num$value / denom$value))
-        })
+        },
+        rep(0.0, 5)
+      ) %>% t()
     }
-    doParallel::stopImplicitCluster()
     ll_easums[[i_iter]] <- e_asums
     
     ## M step
@@ -101,8 +99,7 @@ EM_diagnose <- function(data,
                              mu = fit_marginals[, 2])
     fit_copulasso <- copulasso(data = a_data, 
                                lambda_list = control$lambda,
-                               K_CV = NULL, ## FIXME
-                               ncores = control$ncores)
+                               K_CV = NULL) ## FIXME
     params_new <- list(pi0 = fit_marginals[, 1],
                        mu = fit_marginals[, 2],
                        sigma = fit_sigmas,
@@ -123,8 +120,7 @@ EM_diagnose <- function(data,
   return(list(ll_easums = ll_easums, ll_params = ll_params))
 }
 
-control_EM <- function(ncores = 6,
-                       lambda = 0.2,
+control_EM <- function(lambda = 0.2,
                        maxit = 30,
                        method = "mcmc",
                        verbose = FALSE,
@@ -136,8 +132,7 @@ control_EM <- function(ncores = 6,
                                              step_size = 2,
                                              rel.tol = 1e-6,
                                              abs.tol = 1e-6)) {
-  list(ncores = ncores,
-       lambda = lambda,
+  list(lambda = lambda,
        maxit = maxit,
        method = method,
        verbose = verbose,

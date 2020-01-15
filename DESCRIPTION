@@ -12,6 +12,9 @@ LazyData: true
 RoxygenNote: 6.1.1
 Depends:
   ks,
-  mvtnorm
+  mvtnorm,
+  glasso,
+  future.apply,
+  magrittr
 Suggests: 
     testthat (>= 2.1.0)

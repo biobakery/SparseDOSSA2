@@ -108,12 +108,12 @@ EM_diagnose <- function(data,
     
     diff_abs <- vapply(c(3, 4), 
                        function(i_param)
-                         get_diff(params_new, params, 
+                         get_diff(params_new[[i_param]], params[[i_param]], 
                                   denom_c = control$abs_tol, method = "abs"),
                        0.0)
     diff_rel <- vapply(c(3, 4), 
                        function(i_param)
-                         get_diff(params_new, params, 
+                         get_diff(params_new[[i_param]], params[[i_param]], 
                                   denom_c = control$abs_tol, method = "rel"),
                        0.0)
     

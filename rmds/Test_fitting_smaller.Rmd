@@ -6,7 +6,8 @@ output: html_document
 ---
   
 ```{r setup, include=FALSE}
-dir_project <- "/n/hutlab11_nobackup/users/syma/sparsedossa_update/"
+# dir_project <- "/n/hutlab11_nobackup/users/syma/sparsedossa_update/"
+dir_project <- "~/Dropbox (Harvard University)/sparsedossa_update/"
 knitr::opts_knit$set(root.dir = dir_project)
 library(magrittr)
 library(ggplot2)
@@ -60,7 +61,7 @@ one_job <- function(i_job) {
                                              Omega = params_truth$Omega)
   save(a_samples_fit, file = paste0(dir_output, "a_samples_fit_", i_job, ".RData"))
   a_samples_fit <- a_samples_fit[!apply(a_samples_fit == 0, 1, all), ]
-  x_samples_fit <- apply(a_samples_fit, 2, function(x) x / sum(x))
+  x_samples_fit <- t(apply(a_samples_fit, 1, function(x) x / sum(x)))
 
   # fit SparseDOSSA
   fit_EM <- SparseDOSSA2:::EM_diagnose(
@@ -82,7 +83,7 @@ one_job <- function(i_job) {
                                          sigma = params_truth$sigma,
                                          Omega = params_truth$Omega)
   a_samples <- a_samples[!apply(a_samples == 0, 1, all), ]
-  x_samples <- apply(a_samples, 2, function(x) x / sum(x))
+  x_samples <- t(apply(a_samples, 1, function(x) x / sum(x)))
   params_fit <- fit_EM$ll_params[[length(fit_EM$ll_params)]]
   a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n_r,
                                                       pi0 = params_fit$pi0,
@@ -90,7 +91,7 @@ one_job <- function(i_job) {
                                                       sigma = params_fit$sigma,
                                                       Omega = params_fit$Omega)
   a_samples_SparseDOSSA2 <- a_samples_SparseDOSSA2[!apply(a_samples_SparseDOSSA2 == 0, 1, all), ]
-  x_samples_SparseDOSSA2 <- apply(a_samples_SparseDOSSA2, 2, function(x) x / sum(x))
+  x_samples_SparseDOSSA2 <- t(apply(a_samples_SparseDOSSA2, 1, function(x) x / sum(x)))
   params_x <- list(x_samples, x_samples_SparseDOSSA2) %>%
     purrr::map(~ c(SparseDOSSA2:::get_marginals(.x) %>% as.data.frame(),
                    list(Corr = cor(.x, method = "spear")))) %>%

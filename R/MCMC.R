@@ -10,8 +10,8 @@ EM <- function(data, controls = list(ncores = 6,
   fit_marginals <- get_marginals(data)
   fit_copulasso <- copulasso(data = data, 
                              lambda_list = controls$lambda,
-                             K_CV = NULL) ## FIXME
-                             
+                             K_CV = NULL, ## FIXME
+                             ncores = controls$ncores)
   params <- list(pi0 = fit_marginals[, 1],
                  mu = fit_marginals[,2],
                  sigma = fit_marginals[, 3],
@@ -64,8 +64,9 @@ EM <- function(data, controls = list(ncores = 6,
     fit_sigmas <- get_sigmas(a_data, params$mu)
     fit_copulasso <- copulasso(data = a_data, 
                                lambda_list = controls$lambda,
-                               K_CV = NULL) ## FIXME
-    
+                               K_CV = NULL, ## FIXME
+                               ncores = controls$ncores
+    )
     params_new <- list(pi0 = fit_marginals[, 1],
                        mu = fit_marginals[,2],
                        sigma = fit_sigmas,

@@ -119,7 +119,7 @@ EM_diagnose <- function(data,
     
     ll_params[[i_iter]] <- c(params_new,
                              list(diff = c(diff_abs, diff_rel),
-                                  l = sum(ll_easums[[i_iter]][, 3])))
+                                  l = mean(ll_easums[[i_iter]][, 3])))
     params <- params_new
     
     if(max(diff_abs) < control$abs_tol & max(diff_rel) < control$rel_tol) {

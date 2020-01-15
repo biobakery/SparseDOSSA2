@@ -1,0 +1,34 @@
+---
+title: "Test fitting"
+author: "Siyuan Ma"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "../")
+library(magrittr)
+library(ggplot2)
+set.seed(1)
+```
+```{r simulate data and fit}
+tb_setup <- tidyr::crossing(
+  p = c(2, 5, 10),
+  pi0 = c(0, 0.25, 0.5, 0.75),
+  mu = c(0),
+  sigma = c(1),
+  Omega_diag = c(1),
+  Omega_off_diag = c(0, 0.5, -0.5)
+) %>% 
+  dplyr::mutate(i_setup = 1:(dplyr::n())) %>% 
+  dplyr::group_by(i_setup) %>% 
+  dplyr::mutate(params = list(pi0 = rep(pi0, p),
+                              mu = rep(mu, p),
+                              sigma = rep(sigma, p),
+                              Omega = diag(rep(Omega_diag, p)) +
+                                matrix(Omega_off_diag, p, p)) %>% 
+                  list()) %>% 
+  tidyr::crossing(n = c(10000),
+                  n_r = c(10000),
+                  lambdas = exp(seq(log(1e-5), log(10), length.out = 20)))
+```

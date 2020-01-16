@@ -20,25 +20,25 @@ dx <- function(x,
                               log_offset = log_offset)
   
   fit_integrate <- 
-    integrate(vintegrand_dx,
-              lower = int_limits[1], upper = int_limits[2], 
-              rel.tol = control$rel.tol, abs.tol = control$abs.tol,
-              subdivisions = control$subdivisions,
-              x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-              log_offset = log_offset)
+    cubature::cubintegrate(vintegrand_dx,
+                           lower = int_limits[1], upper = int_limits[2], 
+                           relTol = control$rel_tol, absTol = control$abs_tol,
+                           method = control$method, maxEval = control$max_eval,
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                           log_offset = log_offset)
   
   if(control$jacobian) {
-    fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
-    fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
+    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   }
   
   if(control$proper) {
-    fit_integrate$value <- fit_integrate$value * exp(log_offset)
-    fit_integrate$abs.error <- fit_integrate$abs.error * exp(log_offset)
+    fit_integrate$integral <- fit_integrate$integral * exp(log_offset)
+    fit_integrate$error <- fit_integrate$error * exp(log_offset)
   }
   
   if(control$only_value)
-    return(fit_integrate$value)
+    return(fit_integrate$integral)
   else
     return(fit_integrate)
 }
@@ -65,38 +65,38 @@ log_dx <- function(x,
                               log_offset = log_offset)
   
   fit_integrate <- 
-    integrate(vintegrand_dx,
-              lower = int_limits[1], upper = int_limits[2], 
-              rel.tol = control$rel.tol, abs.tol = control$abs.tol,
-              subdivisions = control$subdivisions,
-              x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-              log_offset = log_offset)
+    cubature::cubintegrate(vintegrand_dx,
+                           lower = int_limits[1], upper = int_limits[2], 
+                           relTol = control$rel_tol, absTol = control$abs_tol,
+                           method = control$method, maxEval = control$max_eval,
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                           log_offset = log_offset)
   
   if(control$jacobian) {
-    fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
-    fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
+    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   }
   
-  return(log(fit_integrate$value) + log_offset)
+  return(log(fit_integrate$integral) + log_offset)
 }
 
 control_integrate <- function(limit_max = 50,
-                              precBits = 100,
                               limit_min = 1e-5,
                               step_size = 2,
-                              rel.tol = 1e-6,
-                              abs.tol = 0,
-                              subdivisions = 10000,
+                              rel_tol = 1e-05,
+                              abs_tol = 1e-12,
+                              max_eval = 1e6,
+                              method = "pcubature",
                               jacobian = FALSE,
                               proper = TRUE,
                               only_value = TRUE) {
   list(limit_max = limit_max,
-       precBits = precBits,
        limit_min = limit_min,
        step_size = step_size,
-       rel.tol = rel.tol,
-       abs.tol = abs.tol,
-       subdivisions = subdivisions,
+       rel_tol = rel_tol,
+       abs_tol = abs_tol,
+       max_eval = max_eval,
+       method = method,
        jacobian = jacobian,
        proper = proper,
        only_value = only_value)
@@ -147,7 +147,7 @@ integrand_dx <- function(log_asum, x,
         log_offset)
 }
 
-vintegrand_dx <- Vectorize(integrand_dx, vectorize.args = "log_asum")
+vintegrand_dx <- Vectorize2(integrand_dx, vectorize.args = "log_asum")
 
 ea <- function(x, 
                pi0, mu, sigma, Omega,
@@ -171,26 +171,25 @@ ea <- function(x,
                               log_offset = log_offset)
   
   fit_integrate <- 
-    integrate(vintegrand_ea,
-              subdivisions = control$subdivisions,
-              rel.tol = .Machine$double.eps^0.5,
-              abs.tol = 0,
-              lower = int_limits[1], upper = int_limits[2],
-              x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega, 
-              log_offset = log_offset)  
+    cubature::cubintegrate(vintegrand_ea,
+                           lower = int_limits[1], upper = int_limits[2], 
+                           relTol = control$rel_tol, absTol = control$abs_tol,
+                           method = control$method, maxEval = control$max_eval,
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                           log_offset = log_offset) 
   
   if(control$jacobian) {
-    fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
-    fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
+    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   }
   
   if(control$proper) {
-    fit_integrate$value <- fit_integrate$value * exp(log_offset)
-    fit_integrate$abs.error <- fit_integrate$abs.error * exp(log_offset)
+    fit_integrate$integral <- fit_integrate$integral * exp(log_offset)
+    fit_integrate$error <- fit_integrate$error * exp(log_offset)
   }
   
   if(control$only_value)
-    return(fit_integrate$value)
+    return(fit_integrate$integral)
   else
     return(fit_integrate)
 }
@@ -204,8 +203,8 @@ integrand_ea <- function(log_asum, x,
         log_offset + log_asum)
 }
 
-vintegrand_ea <- Vectorize(integrand_ea, 
-                           vectorize.args = "log_asum")
+vintegrand_ea <- Vectorize2(integrand_ea, 
+                            vectorize.args = "log_asum")
 
 eloga <- function(x, 
                   pi0, mu, sigma, Omega,
@@ -229,26 +228,25 @@ eloga <- function(x,
                               log_offset = log_offset)
   
   fit_integrate <- 
-    integrate(vintegrand_eloga,
-              subdivisions = control$subdivisions,
-              rel.tol = .Machine$double.eps^0.5,
-              abs.tol = 0,
-              lower = int_limits[1], upper = int_limits[2],
-              x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega, 
-              log_offset = log_offset)  
+    cubature::cubintegrate(vintegrand_eloga,
+                           lower = int_limits[1], upper = int_limits[2], 
+                           relTol = control$rel_tol, absTol = control$abs_tol,
+                           method = control$method, maxEval = control$max_eval,
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                           log_offset = log_offset)
   
   if(control$jacobian) {
-    fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
-    fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
+    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   }
   
   if(control$proper) {
-    fit_integrate$value <- fit_integrate$value * exp(log_offset)
-    fit_integrate$abs.error <- fit_integrate$abs.error * exp(log_offset)
+    fit_integrate$integral <- fit_integrate$integral * exp(log_offset)
+    fit_integrate$error <- fit_integrate$error * exp(log_offset)
   }
   
   if(control$only_value)
-    return(fit_integrate$value)
+    return(fit_integrate$integral)
   else
     return(fit_integrate)
 }
@@ -262,8 +260,8 @@ integrand_eloga <- function(log_asum, x,
         log_offset) * log_asum
 }
 
-vintegrand_eloga <- Vectorize(integrand_eloga, 
-                              vectorize.args = "log_asum")
+vintegrand_eloga <- Vectorize2(integrand_eloga, 
+                               vectorize.args = "log_asum")
 
 eloga2 <- function(x, 
                    pi0, mu, sigma, Omega,
@@ -287,26 +285,25 @@ eloga2 <- function(x,
                               log_offset = log_offset)
   
   fit_integrate <- 
-    integrate(vintegrand_eloga2,
-              subdivisions = control$subdivisions,
-              rel.tol = .Machine$double.eps^0.5,
-              abs.tol = 0,
-              lower = int_limits[1], upper = int_limits[2],
-              x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega, 
-              log_offset = log_offset)  
+    cubature::cubintegrate(vintegrand_eloga2,
+                           lower = int_limits[1], upper = int_limits[2], 
+                           relTol = control$rel_tol, absTol = control$abs_tol,
+                           method = control$method, maxEval = control$max_eval,
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                           log_offset = log_offset)
   
   if(control$jacobian) {
-    fit_integrate$value <- fit_integrate$value / prod(x[x > 0])
-    fit_integrate$abs.error <- fit_integrate$abs.error / prod(x[x > 0])
+    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
+    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   }
   
   if(control$proper) {
-    fit_integrate$value <- fit_integrate$value * exp(log_offset)
-    fit_integrate$abs.error <- fit_integrate$abs.error * exp(log_offset)
+    fit_integrate$integral <- fit_integrate$integral * exp(log_offset)
+    fit_integrate$error <- fit_integrate$error * exp(log_offset)
   }
   
   if(control$only_value)
-    return(fit_integrate$value)
+    return(fit_integrate$integral)
   else
     return(fit_integrate)
 }
@@ -320,8 +317,8 @@ integrand_eloga2 <- function(log_asum, x,
         log_offset) * log_asum^2
 }
 
-vintegrand_eloga2 <- Vectorize(integrand_eloga2, 
-                               vectorize.args = "log_asum")
+vintegrand_eloga2 <- Vectorize2(integrand_eloga2, 
+                                vectorize.args = "log_asum")
 
 log_intx_dc <- function(data, zero_inflation = TRUE) {
   lgamma_data <- lgamma(data + 1)
@@ -371,7 +368,7 @@ ddirichlet1 <- function(x, alpha) {
 #   return(exp(logLik) * asum)
 # }
 # 
-# vintegrand_num_asum <- Vectorize(integrand_num_asum,
+# vintegrand_num_asum <- Vectorize2(integrand_num_asum,
 #                                  vectorize.args = "log_asum")
 
 # 
@@ -392,7 +389,7 @@ ddirichlet1 <- function(x, alpha) {
 #   return(exp(logLik) * asum)
 # }
 # 
-# vintegrand_num_asum <- Vectorize(integrand_num_asum,
+# vintegrand_num_asum <- Vectorize2(integrand_num_asum,
 #                                  vectorize.args = "log_asum")
 # 
 # 

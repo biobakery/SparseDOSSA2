@@ -79,13 +79,13 @@ EM_diagnose <- function(data,
                       sigma = params$sigma, Omega = params$Omega,
                       offset_a = offset_a,
                       control = control$control_numint)
-          return(c("mean" = num$value / denom$value,
-                   "error" = abs(num$abs.error / denom$value) + 
-                     abs(num$value / (denom$value)^2 * 
-                           denom$abs.error),
+          return(c("mean" = num$integral / denom$integral,
+                   "error" = abs(num$error / denom$integral) + 
+                     abs(num$integral / (denom$integral)^2 * 
+                           denom$error),
                    "l" = l,
-                   "eloga" = eloga_num$value / denom$value,
-                   "eloga2" = eloga2_num$value / denom$value))
+                   "eloga" = eloga_num$integral / denom$integral,
+                   "eloga2" = eloga2_num$integral / denom$integral))
         },
         rep(0.0, 5)
       ) %>% t()

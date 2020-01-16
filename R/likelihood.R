@@ -24,6 +24,7 @@ dx <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
+                           nVec = 2,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset)
   
@@ -69,6 +70,7 @@ log_dx <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
+                           nVec = 2,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset)
   
@@ -175,6 +177,7 @@ ea <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
+                           nVec = 2,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset) 
   
@@ -232,6 +235,7 @@ eloga <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
+                           nVec = 2,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset)
   
@@ -289,6 +293,7 @@ eloga2 <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
+                           nVec = 2,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset)
   

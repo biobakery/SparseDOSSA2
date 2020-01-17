@@ -69,9 +69,9 @@ get_sigmas <- function(x, eloga, eloga2, mu) {
   vapply(seq_len(ncol(x)),
          function(i_feature) {
            ind_samples <- x[, i_feature] > 0
-           sqrt(mean((log(x[ind_samples, i_feature]) + eloga[ind_samples] - 
-                        mu[i_feature])^2 +
-                       eloga2[ind_samples] - (eloga[ind_samples])^2))
+           sqrt(mean(eloga2[ind_samples] - 
+                     2 * eloga[ind_samples] * (mu - log(x[ind_samples])) +
+                     (mu - log(x[ind_samples]))^2))
          },
          0.0)
 }

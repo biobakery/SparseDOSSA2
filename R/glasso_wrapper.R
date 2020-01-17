@@ -1,6 +1,7 @@
 glasso_wrapper <- function(S, lambda, source = "glasso",
                            simplify = FALSE,
                            symm = TRUE,
+                           corr = TRUE,
                            threshold = 1e-6) {
   Omega <- diag(1/(diag(S) + lambda))
   
@@ -40,6 +41,10 @@ glasso_wrapper <- function(S, lambda, source = "glasso",
     diag_Omega <- diag(Omega)
     Omega[abs(Omega) < threshold] <- 0
     diag(Omega) <- diag_Omega
+  }
+  
+  if(corr) {
+    Omega <- enforce_corr(Omega)
   }
   
   return(Omega)

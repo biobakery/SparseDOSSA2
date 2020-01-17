@@ -38,6 +38,17 @@ enforce_symm <- function(x, method = "upper") {
   return(x_out)
 }
 
+enforce_corr <- function(x) {
+  if(nrow(x) != ncol(x)) 
+    stop("x does not appear to be a covariance matrix!")
+  
+  diag_sigma <- diag(sqrt(diag(solve(x))))
+  x_out <- diag_sigma %*% x %*% diag_sigma
+  
+  return(x_out)
+}
+
+
 a_to_u <- function(a, pi0, mu, sigma) {
   to_return <-  pi0 / 2
   if(any(a > 0)) ##FIXME
@@ -70,8 +81,8 @@ get_sigmas <- function(x, eloga, eloga2, mu) {
          function(i_feature) {
            ind_samples <- x[, i_feature] > 0
            sqrt(mean(eloga2[ind_samples] - 
-                     2 * eloga[ind_samples] * (mu - log(x[ind_samples])) +
-                     (mu - log(x[ind_samples]))^2))
+                     2 * eloga[ind_samples] * (mu - log(x[ind_samples, i_feature])) +
+                     (mu - log(x[ind_samples, i_feature]))^2))
          },
          0.0)
 }

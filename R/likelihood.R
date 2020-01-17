@@ -163,7 +163,7 @@ ea <- function(x,
   if(log_offset == -Inf) 
     stop("Something went wrong!")
   
-  int_limits <- get_intLimits(vintegrand_ea, 
+  int_limits <- get_intLimits(vintegrand_dx, 
                               center = log(offset_a),
                               limit_max = control$limit_max, 
                               limit_min = control$limit_min,
@@ -221,7 +221,7 @@ eloga <- function(x,
   if(log_offset == -Inf) 
     stop("Something went wrong!")
   
-  int_limits <- get_intLimits(vintegrand_ea, 
+  int_limits <- get_intLimits(vintegrand_dx, 
                               center = log(offset_a),
                               limit_max = control$limit_max, 
                               limit_min = control$limit_min,
@@ -279,7 +279,7 @@ eloga2 <- function(x,
   if(log_offset == -Inf) 
     stop("Something went wrong!")
   
-  int_limits <- get_intLimits(vintegrand_ea, 
+  int_limits <- get_intLimits(vintegrand_dx, 
                               center = log(offset_a),
                               limit_max = control$limit_max, 
                               limit_min = control$limit_min,

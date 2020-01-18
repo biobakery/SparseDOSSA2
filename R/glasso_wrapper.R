@@ -34,6 +34,9 @@ glasso_wrapper <- function(S, lambda, source = "glasso",
     }
   }
   
+  if(det(Omega) < 0)
+    Omega <- -Omega
+  
   if(symm)
     Omega <- enforce_symm(Omega)
   

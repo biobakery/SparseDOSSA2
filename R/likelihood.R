@@ -129,7 +129,7 @@ du <- function(g, Omega, log = TRUE) {
   # Without normalizing constant (2pi)^(-2/p)!
   if(any(g == -Inf | g == Inf)) return(-Inf)
   log_d <- log_dmvnorm(S = g %*% t(g), Omega = Omega) + sum(g^2)/2 + 
-    log(det2(Omega)) / 2
+    log(det(Omega)) / 2
   
   if(log) 
     return(log_d)

@@ -41,8 +41,8 @@ enforce_symm <- function(x, method = "upper") {
 enforce_corr <- function(x) {
   if(nrow(x) != ncol(x)) 
     stop("x does not appear to be a covariance matrix!")
-  
-  diag_sigma <- diag(sqrt(diag(solve(x))))
+
+  diag_sigma <- diag(sqrt(abs(diag(solve(x)))))
   x_out <- diag_sigma %*% x %*% diag_sigma
   
   return(x_out)

@@ -90,5 +90,5 @@ get_s <- function(data, method = "spearman",
 }
 
 negLogLik_mvn <- function(S, Omega) { ##FIXME
-  -log(det2(Omega)) + sum(Omega * S)
+  -log(det(Omega)) + sum(Omega * S)
 }

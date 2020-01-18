@@ -184,3 +184,11 @@ Vectorize2 <- function(FUN, vectorize.args = arg.names, SIMPLIFY = TRUE,
   FUNV
 }
 
+det2 <- function(m) {
+  if(!isSymmetric(m))
+    stop("Matrix must be symmetric!")
+  eigens <- svd(m)$d
+  if(any(eigens <= 0))
+    stop("Negative eigen values found for the matrix!")
+  return(prod(eigens))
+}

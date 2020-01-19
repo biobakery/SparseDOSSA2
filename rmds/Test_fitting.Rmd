@@ -3,12 +3,11 @@ title: "Test_fitting"
 author: "Siyuan Ma"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
-editor_options: 
-  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 dir_project <- "/n/hutlab11_nobackup/users/syma/sparsedossa_update/"
+# dir_project <- "~/Dropbox (Harvard University)/sparsedossa_update/"
 knitr::opts_knit$set(root.dir = dir_project)
 library(magrittr)
 library(ggplot2)
@@ -18,24 +17,21 @@ dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 
 ```{r setup cluster parameter}
 ncpus <- 45
-partition <- "janson_cascade"
-# batchtools::makeRegistry(file.dir = "reg/Test_fitting", packages = "magrittr")
-batchtools::loadRegistry(file.dir = "reg/Test_fitting", writeable = TRUE)
-batchtools::clearRegistry()
+walltime <- 3600 * 24
 ```
 
 ```{r set up simulation grid}
 tb_simulation <- tidyr::crossing(
+  n = c(100, 1000, 10000),
   p = c(3, 5, 10),
-  pi0 = c(0, 0.25, 0.5, 0.75),
+  pi0 = c(0, 0.25, 0.5),
   mu = c(0),
   sigma = c(1),
   Sigma_diag = c(1),
   Sigma_off_diag = c(0, 0.25, -0.25),
-  n = c(10000),
-  n_r = c(10000),
-  lambda = exp(seq(log(1e-5), log(10), length.out = 20)),
-  maxit = 30
+  n_r = c(1000000),
+  lambda = exp(seq(log(1e-4), log(10), length.out = 21)),
+  maxit = 500
 ) %>% 
   dplyr::mutate(i_setup = 1:(dplyr::n())) %>% 
   dplyr::group_by(i_setup) %>% 
@@ -47,71 +43,91 @@ tb_simulation <- tidyr::crossing(
                                 matrix(Sigma_off_diag, p, p)) %>% 
                   list())
 njobs <- nrow(tb_simulation)
+# njobs <- 10
 ```
 
 ```{r simulation task}
 one_job <- function(i_job) {
+  future::plan(future::multicore)
+  set.seed(i_job)
   i_tb_simulation <- tb_simulation[i_job, ]
   params_truth <- i_tb_simulation$params[[1]]
   params_truth$Omega <- solve(params_truth$Sigma)
-  
+
   # simulate data to fit on
-  a_samples_fit <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n, 
-                                             pi0 = params_truth$pi0, 
-                                             mu = params_truth$mu, 
+  a_samples_fit <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n,
+                                             pi0 = params_truth$pi0,
+                                             mu = params_truth$mu,
                                              sigma = params_truth$sigma,
                                              Omega = params_truth$Omega)
+  save(a_samples_fit, file = paste0(dir_output, "a_samples_fit_", i_job, ".RData"))
   a_samples_fit <- a_samples_fit[!apply(a_samples_fit == 0, 1, all), ]
-  x_samples_fit <- apply(a_samples_fit, 2, function(x) x / sum(x))
-  
-  # fit SparseDOSSA2
+  x_samples_fit <- t(apply(a_samples_fit, 1, function(x) x / sum(x)))
+
+  # fit SparseDOSSA
+  time_start <- Sys.time()
   fit_EM <- SparseDOSSA2:::EM_diagnose(
-    data = x_samples_fit, 
-    control = list(ncores = ncpus,
-                   lambda = i_tb_simulation$lambda, 
+    data = x_samples_fit,
+    control = list(lambda = i_tb_simulation$lambda,
                    maxit = i_tb_simulation$maxit,
-                   method = "numint",
+                   abs_tol = 1e-5,
+                   rel_tol = 1e-5,
                    verbose = FALSE,
-                   control_numint = list(limit_min = 1e-14,
-                                         rel.tol = 1e-4,
-                                         abs.tol = 1e-8,
-                                         subdivisions = 1000)))
+                   control_numint = list(limit_max = 1400,
+                                         limit_min = 1e-14,
+                                         method = "hcubature")))
   save(fit_EM, file = paste0(dir_output, "fit_EM_", i_job, ".RData"))
+  time <- Sys.time() - time_start
   
   ## Evaluate compositional variable parameters
-  a_samples <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n, 
-                                         pi0 = params_truth$pi0, 
-                                         mu = params_truth$mu, 
+  a_samples <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n_r,
+                                         pi0 = params_truth$pi0,
+                                         mu = params_truth$mu,
                                          sigma = params_truth$sigma,
                                          Omega = params_truth$Omega)
   a_samples <- a_samples[!apply(a_samples == 0, 1, all), ]
-  x_samples <- apply(a_samples, 2, function(x) x / sum(x))
-  params_fit <- fit_EM$ll_params[[i_tb_simulation$maxit]]
-  a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n, 
-                                                      pi0 = params_fit$pi0, 
-                                                      mu = params_fit$mu, 
+  x_samples <- t(apply(a_samples, 1, function(x) x / sum(x)))
+  params_fit <- fit_EM$ll_params[[length(fit_EM$ll_params)]]
+  a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n_r,
+                                                      pi0 = params_fit$pi0,
+                                                      mu = params_fit$mu,
                                                       sigma = params_fit$sigma,
                                                       Omega = params_fit$Omega)
   a_samples_SparseDOSSA2 <- a_samples_SparseDOSSA2[!apply(a_samples_SparseDOSSA2 == 0, 1, all), ]
-  x_samples_SparseDOSSA2 <- apply(a_samples_SparseDOSSA2, 2, function(x) x / sum(x))
-  params_x <- list(x_samples, x_samples_SparseDOSSA2) %>% 
-    purrr::map(~ c(SparseDOSSA2:::get_marginals(.x) %>% as.data.frame(),
-                   list(Corr = cor(.x, method = "spear")))) %>% 
-    set_names(c("truth", "fit"))
-  save(params_x, file = paste0(dir_output, "params_x_", i_job, ".RData"))
+  x_samples_SparseDOSSA2 <- t(apply(a_samples_SparseDOSSA2, 1, function(x) x / sum(x)))
   
-  params_a <- list(params_truth, params_fit) %>% 
-    purrr::map(~.x[c("pi0", "mu", "sigma", "Omega")]) %>% 
+  # compile results
+  params_x <- list(x_samples, x_samples_SparseDOSSA2) %>%
+    purrr::map(~ c(SparseDOSSA2:::get_marginals(.x) %>% as.data.frame(),
+                   list(Corr = cor(.x, method = "spear")))) %>%
     set_names(c("truth", "fit"))
-  return(list(params_a = params_a,
-              params_x = params_x))
+  params_a <- list(params_truth, params_fit) %>%
+    purrr::map(~.x[c("pi0", "mu", "sigma", "Omega")]) %>%
+    set_names(c("truth", "fit"))
+  
+  result <- list(params_x = params_x,
+                 params_a = params_a,
+                 time = time)
+  save(result, file = paste0(dir_output, "result_", i_job, ".RData"))
+  
+  return(result)
 }
 ```
 
 ```{r submit job}
-tb_ids <- batchtools::batchMap(one_job, 
-                               i_job = seq_len(njobs))
-# one_test <- batchtools::testJob(id = 1)
-batchtools::batchExport(mget(ls()))
-batchtools::submitJobs(resources =  list(ncpus = ncpus, partition = "janson_cascade"))
+time_start <- Sys.time()
+future.batchtools::batchtools_slurm %>%
+  future::plan(resources = list(ncpus = ncpus,
+                                walltime = walltime),
+               template = "sma")
+l_results <- list()
+for(i_job in seq_len(njobs)) {
+  l_results[[i_job]] <- future::future(one_job(i_job))
+}
+for(i_job in seq_len(njobs)) {
+  l_results[[i_job]] <- try(future::value(l_results[[i_job]]))
+}
+save(l_results, file = paste0(dir_output, "l_results.RData"))
+time_end <- Sys.time()
+print(time_end - time_start)
 ```

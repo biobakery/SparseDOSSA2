@@ -34,17 +34,14 @@ glasso_wrapper <- function(S, lambda, source = "glasso",
     }
   }
   
-  if(det(Omega) < 0)
-    Omega <- -Omega
-  
-  if(symm)
-    Omega <- enforce_symm(Omega)
-  
   if(!is.null(threshold)) {
     diag_Omega <- diag(Omega)
     Omega[abs(Omega) < threshold] <- 0
     diag(Omega) <- diag_Omega
   }
+  
+  if(symm)
+    Omega <- enforce_symm(Omega, method = "svd")
   
   if(corr) {
     Omega <- enforce_corr(Omega)

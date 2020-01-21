@@ -2,7 +2,7 @@ dx <- function(x,
                pi0, mu, sigma, Omega,
                offset_a = 1,
                control = list()) {
-  control <- do.call("control_integrate", control)
+  control <- do.call(control_integrate, control)
   
   ## FIXME
   log_offset <- dloga(a = a(x, offset_a),
@@ -48,7 +48,7 @@ log_dx <- function(x,
                    pi0, mu, sigma, Omega,
                    offset_a,
                    control = list()) {
-  control <- do.call("control_integrate", control)
+  control <- do.call(control_integrate, control)
   
   log_offset <- 
     SparseDOSSA2:::dloga(a = a(x, offset_a),
@@ -155,7 +155,7 @@ ea <- function(x,
                pi0, mu, sigma, Omega,
                offset_a = 1,
                control) {
-  control <- do.call("control_integrate", control)
+  control <- do.call(control_integrate, control)
   
   ## FIXME
   log_offset <- dloga(a = a(x, offset_a),
@@ -213,7 +213,7 @@ eloga <- function(x,
                   pi0, mu, sigma, Omega,
                   offset_a = 1,
                   control) {
-  control <- do.call("control_integrate", control)
+  control <- do.call(control_integrate, control)
   
   ## FIXME
   log_offset <- dloga(a = a(x, offset_a),
@@ -271,7 +271,7 @@ eloga2 <- function(x,
                    pi0, mu, sigma, Omega,
                    offset_a = 1,
                    control) {
-  control <- do.call("control_integrate", control)
+  control <- do.call(control_integrate, control)
   
   ## FIXME
   log_offset <- dloga(a = a(x, offset_a),

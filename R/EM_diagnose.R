@@ -1,6 +1,6 @@
 EM_diagnose <- function(data, 
                         control = list()) {
-  control <- do.call("control_EM", control)
+  control <- do.call(control_EM, control)
   
   # Initialize using relative abundances
   fit_marginals <- get_marginals(data)
@@ -10,6 +10,7 @@ EM_diagnose <- function(data,
   params <- list(pi0 = fit_marginals[, 1],
                  mu = fit_marginals[,2],
                  sigma = fit_marginals[, 3],
+                 Sigma = solve(fit_copulasso$fits[[1]]),
                  Omega = fit_copulasso$fits[[1]])
   
   i_iter <- 0
@@ -17,6 +18,7 @@ EM_diagnose <- function(data,
   ll_easums <- list()
   ll_params <- list()
   while(TRUE) {
+    time <- Sys.time()
     i_iter <- i_iter + 1
     if(i_iter > control$maxit) break
     if(control$verbose)
@@ -92,6 +94,9 @@ EM_diagnose <- function(data,
     }
     ll_easums[[i_iter]] <- e_asums
     
+    if(control$verbose)
+      print(Sys.time() - time)
+    
     ## M step
     a_data <- (data * e_asums[, 1])[!is.na(e_asums[, 1]), ] ## FIXME
     fit_sigmas <- get_sigmas(x = data, 
@@ -104,14 +109,15 @@ EM_diagnose <- function(data,
     params_new <- list(pi0 = fit_marginals[, 1],
                        mu = fit_marginals[, 2],
                        sigma = fit_sigmas,
+                       Sigma = solve(fit_copulasso$fits[[1]]),
                        Omega = fit_copulasso$fits[[1]])
     
-    diff_abs <- vapply(c(3, 4), 
+    diff_abs <- vapply(c("sigma", "Sigma"), 
                        function(i_param)
                          get_diff(params_new[[i_param]], params[[i_param]], 
                                   denom_c = control$abs_tol, method = "abs"),
                        0.0)
-    diff_rel <- vapply(c(3, 4), 
+    diff_rel <- vapply(c("sigma", "Sigma"), 
                        function(i_param)
                          get_diff(params_new[[i_param]], params[[i_param]], 
                                   denom_c = control$abs_tol, method = "rel"),
@@ -119,7 +125,8 @@ EM_diagnose <- function(data,
     
     ll_params[[i_iter]] <- c(params_new,
                              list(diff = c(diff_abs, diff_rel),
-                                  l = mean(ll_easums[[i_iter]][, 3])))
+                                  l = mean(ll_easums[[i_iter]][, 3]),
+                                  time = Sys.time() - time))
     params <- params_new
     
     if(max(diff_abs) < control$abs_tol & max(diff_rel) < control$rel_tol) {
@@ -134,10 +141,10 @@ EM_diagnose <- function(data,
 }
 
 control_EM <- function(lambda = 0.2,
-                       maxit = 30,
+                       maxit = 1000,
                        method = "numint",
-                       rel_tol = 5e-2,
-                       abs_tol = 1e-4,
+                       rel_tol = 1e-3,
+                       abs_tol = 1e-3,
                        control_mcmc = list(R = 10000,
                                            burnin = 0.1),
                        control_numint = list(subdivisions = 10000,

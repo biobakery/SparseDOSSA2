@@ -17,7 +17,7 @@ upper_tri <- function(x, warning = TRUE) {
   x[upper.tri(x)]
 }
 
-enforce_symm <- function(x, method = "upper") {
+enforce_symm <- function(x, method = "svd") {
   if(nrow(x) != ncol(x)) 
     stop("x does not appear to be a covariance matrix!")
   x_out <- x
@@ -33,6 +33,12 @@ enforce_symm <- function(x, method = "upper") {
       x_out[upper.tri(x_out)] <- upper_tri(t(x_out), warning = FALSE)
     if(method == "upper")
       x_out[lower.tri(x_out)] <- lower_tri(t(x_out), warning = FALSE)
+    if(method == "svd") {
+      svd_fit <- svd(x)
+      # just in case it's not pos-def 
+      svd_fit$d <- abs(svd_fit$d) ## FIXME
+      x_out <- svd_fit$u %*% diag(svd_fit$d) %*% t(svd_fit$u)
+    }
   }
   
   return(x_out)
@@ -113,6 +119,54 @@ get_intLimits <- function(f,
     lower <- vlim_lower[length(vlim_lower)]
   }
     
+  vval_upper <- f(vlim_upper, ...)
+  if(any(vval_upper < 0))
+    stop("There are negative values of f!")
+  vflag_upper <- vval_upper > 0
+  if(any(vflag_upper)) {
+    if(vflag_upper[1]) {
+      warning("f is already positive at maximum upper limit!")
+      upper <- upper_bound
+    }
+    upper <- vlim_upper[c(vflag_upper[-1], TRUE)][1]
+  } else {
+    warning("No positive f value for upper limits!")
+    upper <- vlim_upper[length(vlim_upper)]
+  }
+  
+  return(c(lower, upper))
+}
+
+get_offset <- function(x, 
+                       pi0, mu, sigma, Omega,
+                       limit_max, limit_min, step_size) {
+  
+  vchange <- exp(seq(from = log(limit_max),
+                     to = log(limit_min),
+                     by = -log(step_size)))
+  vlim <- c(-vchange, vchange)
+  vlim <- vlim[exp(vlim) > 0] ## FIXME??
+  
+  vval <- vapply(vlim, 
+                 function(i_loga) {
+                   dloga(a = a(x, exp(i_loga)),
+                         pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+                 },
+                 0.0)
+  if(any(vval_lower < 0))
+    stop("There are negative values of f!")
+  vflag_lower <- vval_lower > 0
+  if(any(vflag_lower)) {
+    if(vflag_lower[1]) {
+      warning("f is already positive at maximum lower limit!")
+      lower <- lower_bound
+    }
+    lower <- vlim_lower[c(vflag_lower[-1], TRUE)][1]
+  } else {
+    warning("No positive f value for lower limits!")
+    lower <- vlim_lower[length(vlim_lower)]
+  }
+  
   vval_upper <- f(vlim_upper, ...)
   if(any(vval_upper < 0))
     stop("There are negative values of f!")

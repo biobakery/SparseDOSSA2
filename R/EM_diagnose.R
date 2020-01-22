@@ -1,5 +1,5 @@
 EM_diagnose <- function(data, 
-                        params_init,
+                        params_init = NULL,
                         control = list()) {
   control <- do.call(control_EM, control)
   

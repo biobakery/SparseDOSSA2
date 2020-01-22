@@ -1,12 +1,15 @@
 EM_diagnose <- function(data, 
+                        params_init,
                         control = list()) {
   control <- do.call(control_EM, control)
   
-  # Initialize using relative abundances
   fit_marginals <- get_marginals(data)
-  fit_copulasso <- copulasso(data = data, 
-                             lambda_list = control$lambda,
-                             K_CV = NULL) ## FIXME
+  if(is.null(params_init)) {
+    # Initialize using relative abundances
+    fit_copulasso <- copulasso(data = data, 
+                               lambda_list = control$lambda,
+                               K_CV = NULL) ## FIXME
+  }
   params <- list(pi0 = fit_marginals[, 1],
                  mu = fit_marginals[,2],
                  sigma = fit_marginals[, 3],

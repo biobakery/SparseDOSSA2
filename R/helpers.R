@@ -100,38 +100,29 @@ get_intLimits <- function(f,
   vchange <- exp(seq(from = log(limit_max),
                      to = log(limit_min),
                      by = -log(step_size)))
-  vlim_lower <- center - vchange
-  vlim_upper <- center + vchange
+  vlim <- c(center - vchange,
+            center,
+            center + rev(vchange))
   
-  vlim_lower <- vlim_lower[exp(vlim_lower) > 0] ## FIXME??
-  vval_lower <- f(vlim_lower, ...)
-  if(any(vval_lower < 0))
+  vval <- f(vlim, ...)
+  if(any(vval < 0))
     stop("There are negative values of f!")
-  vflag_lower <- vval_lower > 0
-  if(any(vflag_lower)) {
-    if(vflag_lower[1]) {
-      warning("f is already positive at maximum lower limit!")
-      lower <- lower_bound
-    }
-    lower <- vlim_lower[c(vflag_lower[-1], TRUE)][1]
-  } else {
-    warning("No positive f value for lower limits!")
-    lower <- vlim_lower[length(vlim_lower)]
+  vflag <- vval > 0
+  vindex <- which(vflag)
+  if(!any(vflag)) {
+    stop("Failed to detect positive f values!")
   }
-    
-  vval_upper <- f(vlim_upper, ...)
-  if(any(vval_upper < 0))
-    stop("There are negative values of f!")
-  vflag_upper <- vval_upper > 0
-  if(any(vflag_upper)) {
-    if(vflag_upper[1]) {
-      warning("f is already positive at maximum upper limit!")
-      upper <- upper_bound
-    }
-    upper <- vlim_upper[c(vflag_upper[-1], TRUE)][1]
+  if(vflag[1]) {
+    warning("f is already positive at maximum lower limit!")
+    lower <- lower_bound
   } else {
-    warning("No positive f value for upper limits!")
-    upper <- vlim_upper[length(vlim_upper)]
+    lower <- vlim[min(vindex) - 1]
+  }
+  if(rev(vflag)[1]) {
+    warning("f is already positive at maximum upper limit!")
+    upper <- upper_bound
+  } else {
+    upper <- vlim[max(vindex) + 1]
   }
   
   return(c(lower, upper))

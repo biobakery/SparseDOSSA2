@@ -1,0 +1,244 @@
+---
+title: "Summary of simulation results"
+author: "Siyuan Ma"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+dir_project <- "/n/hutlab11_nobackup/users/syma/sparsedossa_update/"
+# dir_project <- "~/Dropbox (Harvard University)/sparsedossa_update/"
+knitr::opts_knit$set(root.dir = dir_project)
+library(magrittr)
+library(ggplot2)
+dir_output <- paste0(dir_project, "results/Test_fitting/")
+dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+```
+# Simulation set up
+
+- Sample size $n \in \{100, 1000\}$ (only $n = 100$ results fitted).
+- Number of features $p \in \{3, 5, 10\}$.
+- Per-feature zero inflation probability $\pi0 \in \{0, 0.25, 0.5\}$ (same per-feautre parameters for each feature).
+- Mean of per-feature positive log __absolute abundance__ $= 0$.
+- Standard deviation of per-feature positive log __absolute abundance__ $= 1$.
+- Feature-feature __correlation in the copula component__ $\rho \in \{-0.25, 0, 0.25\}$
+
+```{r read in files, include=FALSE}
+tb_simulation <- tidyr::crossing(
+  n = c(100, 1000, 10000),
+  p = c(3, 5, 10),
+  pi0 = c(0, 0.25, 0.5),
+  mu = c(0),
+  sigma = c(1),
+  Sigma_diag = c(1),
+  Sigma_off_diag = c(0, 0.25, -0.25),
+  n_r = c(1000000),
+  lambda = exp(seq(log(1e-4), log(10), length.out = 21)),
+  maxit = 500
+) %>% 
+  dplyr::mutate(i_setup = 1:(dplyr::n())) %>% 
+  dplyr::group_by(i_setup) %>% 
+  dplyr::mutate(params = list(pi0 = rep(pi0, p),
+                              mu = rep(mu, p),
+                              sigma = rep(sigma, p),
+                              Sigma = diag(rep(Sigma_diag, p)) -
+                                diag(rep(Sigma_off_diag, p)) +
+                                matrix(Sigma_off_diag, p, p)) %>% 
+                  list()) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(i_setup) %>% 
+  dplyr::mutate(N_p = paste0("n=", n, 
+                             ",p=", p) %>% 
+                  forcats:::as_factor(),
+                pi0_Sigma_off_diag = paste0("pi0=", pi0,
+                                            ",rho=", Sigma_off_diag) %>% 
+                  forcats:::as_factor())
+
+result_files <- list.files(dir_output, pattern = "^result")
+l_results <- list()
+for(i_file in seq_along(result_files)) {
+  i <- result_files[i_file] %>% 
+    gsub("result_", "", ., fixed = TRUE) %>% 
+    gsub(".RData", "", ., fixed = TRUE) %>% 
+    as.numeric
+  load(paste0(dir_output, result_files[i_file]))
+  load(paste0(dir_output, "fit_EM_", i, ".RData"))
+  result$i <- i
+  result$converge <- fit_EM$converge
+  result$diff <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$diff
+  l_results <- c(l_results, list(result))
+}
+```
+
+# Fitting performance
+First, we evaluate SparseDOSSA2's fitting performance. Because of the non-identifiability of models for absolute abundances, we evaluate the induced parameters in the __relative abundance__ space. This involves 
+
+- Mean of per-feature positive log __relative abundance__ $\mu_x$.
+- Standard deviation of per-feature positive log __relative abundance__ $\sigma_x$.
+- For correlation, we evaluate the feature-feature __Spearman correlation__ $Corr_x$.
+
+The zero-inflation proportion can be estimated trivially so not visualized. 
+
+Maximum relative difference (across features) between the true and the estimated values for each parameter are visualized, across different tuning parameter $\lambda$ values. Row panels are arranged according to dimensions (sample size, number of features), and column panels are arranged across parameters ($\pi_0, \rho$). Unplotted panels haven't finished simulation run yet. Note that many runs encountered errors / took too long and got cancelled (not plotted), or did not converge (absolute difference $< 10^{-5}$, relative difference $<10^{-5}$) within the allowed maximum iteration number (500) (in grey color). These are discussed in the next section. Here we focus on the successful runs.
+
+Takeaways:
+
+- For each panel, if we use the smallest value across different $\lambda$s as the "best achievable" relative difference if we chose $\lambda$ through cross-validation, our method seems to perform reasonably well (relative difference $< 0.1$) in most cases.
+- For feature-feature Spearman correlations, model performs much worse as $p$ increases, which made sense to me.
+
+Questions:
+
+- How much of the difference between estimation and truth is due to randomness from sample size?
+    - To answer this, I can generate a total of $R$ different datasets for each simulation setting, and examine the distribution of model estimations across the datasets. This would give me a classical empirical bias/variance estimation table.
+- Factor in the fact that $\lambda$ needs to be estimated through CV
+    - Related, should we be concerned that performance is very "jiggly" across different $\lambda$s?
+    - Problem is CV can be very time consuming given the current time cost (see next section). Maybe switch to something faster like AIC?
+
+```{r set up simulation grid, fig.width=16, fig.height=8, echo=FALSE}
+tb_results_a <- 
+  c("mu", "sigma", "Corr") %>% 
+  purrr::map_dfr(function(param) {
+    tibble::tibble(
+      i_setup = tb_simulation$i_setup,
+      Param = param
+    ) %>% 
+      dplyr::left_join(
+        tibble::tibble(
+          i_setup = l_results %>% 
+            purrr::map_dbl("i"),
+          Truth = l_results %>% 
+            purrr::map(~.x$params_a$truth[[param]]),
+          SparseDOSSA2 = l_results %>% 
+            purrr::map(~.x$params_a$fit[[param]]),
+          Converge = l_results %>% 
+            purrr::map_lgl(~.x$converge$converge)
+        ),
+        by = "i_setup"
+      )
+  }) %>% 
+  dplyr::filter(!is.na(Converge)) %>% 
+  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>% 
+  dplyr::group_by(i_setup, Param) %>% 
+  dplyr::mutate(
+    abs_diff = {
+      if(is.null(Truth[[1]]))
+        NA
+      else
+        SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]])
+    },
+    rel_diff = {
+      if(is.null(Truth[[1]]))
+        NA
+      else
+        SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]], method = "rel")
+    }
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::left_join(tb_simulation, by = "i_setup") 
+
+tb_results_x <- 
+  c("mu", "sigma", "Corr") %>% 
+  purrr::map_dfr(function(param) {
+    tibble::tibble(
+      i_setup = tb_simulation$i_setup,
+      Param = param
+    ) %>% 
+      dplyr::left_join(
+        tibble::tibble(
+          i_setup = l_results %>% 
+            purrr::map_dbl("i"),
+          Truth = l_results %>% 
+            purrr::map(~.x$params_x$truth[[param]]),
+          SparseDOSSA2 = l_results %>% 
+            purrr::map(~.x$params_x$fit[[param]]),
+          Converge = l_results %>% 
+            purrr::map_lgl(~.x$converge$converge)
+        ),
+        by = "i_setup"
+      )
+  }) %>% 
+  dplyr::filter(!is.na(Converge)) %>% 
+  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>% 
+  dplyr::group_by(i_setup, Param) %>% 
+  dplyr::mutate(
+    abs_diff = {
+      if(is.null(Truth[[1]]))
+        NA
+      else
+        SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]])
+    },
+    rel_diff = {
+      if(is.null(Truth[[1]]))
+        NA
+      else
+        SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]], method = "rel")
+    }
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::left_join(tb_simulation, by = "i_setup") 
+
+for(i_param in c("mu", "sigma", "Corr")) {
+  p_fit <- tb_results_x %>% 
+    dplyr::filter(Param == i_param) %>% 
+    ggplot(aes(x = log10(lambda), y = rel_diff, color = Converge)) +
+    geom_point() +
+    geom_line() +
+    scale_color_manual(values = c("TRUE"="black", "FALSE"="grey"), 
+                       na.value = "grey") +
+    facet_grid(N_p ~ pi0_Sigma_off_diag) +
+    ggtitle(paste0(i_param, "_x"))
+  print(p_fit)
+}
+```
+
+# Computation considerations
+I've switched to the [cubature](https://cran.r-project.org/web/packages/cubature/index.html) package for numeric integration. The `hcubature` method gives same results as `integrate` but gives successful fits when the latter gives errors. However, with this update a) there are still cases where errors occur, or fit takes abnormally long ($> 12$ hours) to converge, and b) some times EM does not converge. When it convergences successfully, the computation cost does not seem too bad. I think these require additional investigations:
+
+- Why's the method failing in certain cases?
+- What can cause the method to run slowly (seems to be a problem with `cubature`)?
+
+```{r diagnostics, fig.width=15, fig.height=8, echo=FALSE}
+tb_converge <- 
+  tibble::tibble(
+    i_setup = l_results %>% 
+      purrr::map_dbl("i"),
+    Converge = l_results %>% 
+      purrr::map_lgl(~.x$converge$converge),
+    N_iter = l_results %>% 
+      purrr::map_dbl(~.x$converge$n_iter),
+    Time = l_results %>% 
+      purrr::map_dbl("time"),
+    Diff = l_results %>% 
+      purrr::map("diff"),
+    Max_diff = Diff %>% 
+      purrr::map_dbl(~max(.x[3:4]))
+  )
+tb_converge <- 
+  tb_simulation %>% 
+  dplyr::left_join(tb_converge, by = "i_setup") %>% 
+  dplyr::filter(i_setup <= max(tb_results_x$i_setup, na.rm = TRUE))
+p_time <- tb_converge %>% 
+  dplyr::filter(!is.na(Converge)) %>% 
+  ggplot(aes(x = log10(lambda), y = Time, color = Converge)) +
+  geom_point() + geom_line() +
+  scale_color_manual(values = c("TRUE"="black", "FALSE"="grey")) +
+  facet_grid(N_p ~ pi0_Sigma_off_diag) +
+  ggtitle("Time to fit in min on 45 cores")
+p_iter <- tb_converge %>% 
+  dplyr::filter(!is.na(Converge)) %>% 
+  ggplot(aes(x = log10(lambda), y = N_iter, color = Converge)) +
+  geom_point() + geom_line() +
+  scale_color_manual(values = c("TRUE"="black", "FALSE"="grey")) +
+  facet_grid(N_p ~ pi0_Sigma_off_diag) +
+  ggtitle("Number of EM iterations")
+p_diff <- tb_converge %>% 
+  dplyr::filter(!is.na(Converge)) %>% 
+  ggplot(aes(x = log10(lambda), y = log10(Max_diff), color = Converge)) +
+  geom_point() + geom_line() +
+  scale_color_manual(values = c("TRUE"="black", "FALSE"="grey")) +
+  facet_grid(N_p ~ pi0_Sigma_off_diag) +
+  ggtitle("Difference at the end of iteration")
+print(p_time)
+print(p_iter)
+print(p_diff)
+```

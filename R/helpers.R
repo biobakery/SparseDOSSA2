@@ -103,6 +103,7 @@ get_intLimits <- function(f,
   vlim <- c(center - vchange,
             center,
             center + rev(vchange))
+  vlim <- vlim[exp(vlim) > 0] ## FIXME??
   
   vval <- f(vlim, ...)
   if(any(vval < 0))

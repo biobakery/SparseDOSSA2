@@ -1,5 +1,5 @@
 ---
-title: "Summary of simulation results"
+title: "Summary of simulation results (a space_"
 author: "Siyuan Ma"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
@@ -24,28 +24,8 @@ dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 - Feature-feature __correlation in the copula component__ $\rho \in \{-0.25, 0, 0.25\}$
 
 ```{r read in files, include=FALSE}
-tb_simulation <- tidyr::crossing(
-  n = c(100, 1000, 10000),
-  p = c(3, 5, 10),
-  pi0 = c(0, 0.25, 0.5),
-  mu = c(0),
-  sigma = c(1),
-  Sigma_diag = c(1),
-  Sigma_off_diag = c(0, 0.25, -0.25),
-  n_r = c(1000000),
-  lambda = exp(seq(log(1e-4), log(10), length.out = 21)),
-  maxit = 500
-) %>% 
-  dplyr::mutate(i_setup = 1:(dplyr::n())) %>% 
-  dplyr::group_by(i_setup) %>% 
-  dplyr::mutate(params = list(pi0 = rep(pi0, p),
-                              mu = rep(mu, p),
-                              sigma = rep(sigma, p),
-                              Sigma = diag(rep(Sigma_diag, p)) -
-                                diag(rep(Sigma_off_diag, p)) +
-                                matrix(Sigma_off_diag, p, p)) %>% 
-                  list()) %>% 
-  dplyr::ungroup() %>% 
+load(paste0(dir_output, "tb_simulation.RData"))
+tb_simulation <- tb_simulation %>% 
   dplyr::arrange(i_setup) %>% 
   dplyr::mutate(N_p = paste0("n=", n, 
                              ",p=", p) %>% 
@@ -55,89 +35,130 @@ tb_simulation <- tidyr::crossing(
                   forcats:::as_factor())
 
 result_files <- list.files(dir_output, pattern = "^result")
+
+# fit_files <- list.files(dir_output, pattern = "^fit")
+# is_results <- result_files %>% 
+#   gsub("result_", "", ., fixed = TRUE) %>% 
+#   gsub(".RData", "", ., fixed = TRUE)
+# is_fits <- fit_files %>% 
+#   gsub("fit_EM_", "", ., fixed = TRUE) %>% 
+#   gsub(".RData", "", ., fixed = TRUE)
+# l_err <- list()
+# l_log <- list()
+# for(i_dir in batchtools_dir) {
+#   i_job <- batchtools::loadRegistry(i_dir, make.default = FALSE, writeable = FALSE)
+#   l_err <- c(l_err,
+#              list(batchtools::getErrorMessages(id = 1, reg = i_job)))
+#   l_log <- c(l_log, 
+#              list(batchtools::getLog(id = 1, reg = i_job)))
+# }
+# job <- batchtools::loadRegistry(".future/20200124_073916-iF3zj9/batchtools_999359202/")
+# fit_files <- list.files(dir_output, pattern = "^fit")
+# info_result_files <- file.info(paste0(dir_output, result_files))
+# info_fit_files <- file.info(paste0(dir_output, fit_files))
+# result_files <- result_files[info_result_files$mtime > as.POSIXct("2020-01-22 00:00:00 UTC")]
+# fit_files <- fit_files[info_fit_files$mtime > as.POSIXct("2020-01-22 00:00:00 UTC")]
+# i_result_files <- result_files %>%
+#   gsub("result_", "", ., fixed = TRUE) %>%
+#   gsub(".RData", "", ., fixed = TRUE)
+# i_fit_files <- fit_files %>%
+#   gsub("fit_EM_", "", ., fixed = TRUE) %>%
+#   gsub(".RData", "", ., fixed = TRUE)
+# for(i_file in setdiff(i_fit_files, i_result_files)) {
+#   i_file <- as.numeric(i_file)
+#   load(paste0(dir_output, "fit_EM_", i_file, ".RData"))
+# 
+#   i_tb_simulation <- tb_simulation[i_file, ]
+#   params_truth <- i_tb_simulation$params[[1]]
+#   params_truth$Omega <- solve(params_truth$Sigma)
+# 
+#   a_samples <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n_r,
+#                                          pi0 = params_truth$pi0,
+#                                          mu = params_truth$mu,
+#                                          sigma = params_truth$sigma,
+#                                          Omega = params_truth$Omega)
+#   a_samples <- a_samples[!apply(a_samples == 0, 1, all), ]
+#   x_samples <- t(apply(a_samples, 1, function(x) x / sum(x)))
+#   params_fit <- fit_EM$ll_params[[length(fit_EM$ll_params)]]
+#   a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n_r,
+#                                                       pi0 = params_fit$pi0,
+#                                                       mu = params_fit$mu,
+#                                                       sigma = params_fit$sigma,
+#                                                       Omega = params_fit$Omega)
+#   a_samples_SparseDOSSA2 <- a_samples_SparseDOSSA2[!apply(a_samples_SparseDOSSA2 == 0, 1, all), ]
+#   x_samples_SparseDOSSA2 <- t(apply(a_samples_SparseDOSSA2, 1, function(x) x / sum(x)))
+# 
+#   params_x <- list(x_samples, x_samples_SparseDOSSA2) %>%
+#     purrr::map(~ c(SparseDOSSA2:::get_marginals(.x) %>% as.data.frame(),
+#                    list(Corr = cor(.x, method = "spear")))) %>%
+#     set_names(c("truth", "fit"))
+# }
+
+
 l_results <- list()
 for(i_file in seq_along(result_files)) {
-  i <- result_files[i_file] %>% 
-    gsub("result_", "", ., fixed = TRUE) %>% 
-    gsub(".RData", "", ., fixed = TRUE) %>% 
+  i <- result_files[i_file] %>%
+    gsub("result_", "", ., fixed = TRUE) %>%
+    gsub(".RData", "", ., fixed = TRUE) %>%
     as.numeric
   load(paste0(dir_output, result_files[i_file]))
   load(paste0(dir_output, "fit_EM_", i, ".RData"))
   result$i <- i
   result$converge <- fit_EM$converge
   result$diff <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$diff
+  result$params_x$truth$Corr_off_diag <- result$params_x$truth$Corr[lower.tri(result$params_x$truth$Corr)]
+  result$params_x$fit$Corr_off_diag <- result$params_x$fit$Corr[lower.tri(result$params_x$fit$Corr)]
+  result$l <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$l
+
+  # i_tb_simulation <- tb_simulation[i, ]
+  # params_truth <- i_tb_simulation$params[[1]]
+  # params_truth$Omega <- solve(params_truth$Sigma)
+
+  # a_samples <- SparseDOSSA2:::rcopulasso(n = 100000,
+  #                                        pi0 = params_truth$pi0,
+  #                                        mu = params_truth$mu,
+  #                                        sigma = params_truth$sigma,
+  #                                        Omega = params_truth$Omega)
+  # a_samples <- a_samples[!apply(a_samples == 0, 1, all), ]
+  # x_samples <- t(apply(a_samples, 1, function(x) x / sum(x)))
+  # params_fit <- fit_EM$ll_params[[length(fit_EM$ll_params)]]
+  # a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = 100000,
+  #                                                     pi0 = params_fit$pi0,
+  #                                                     mu = params_fit$mu,
+  #                                                     sigma = params_fit$sigma,
+  #                                                     Omega = params_fit$Omega)
+  # a_samples_SparseDOSSA2 <- a_samples_SparseDOSSA2[!apply(a_samples_SparseDOSSA2 == 0, 1, all), ]
+  # x_samples_SparseDOSSA2 <- t(apply(a_samples_SparseDOSSA2, 1, function(x) x / sum(x)))
+  # 
+  # result$params_x$truth$Cov <- cov(log(x_samples + 1e-5), method = "pear")
+  # result$params_x$truth$Cov_off_diag <- result$params_x$truth$Cov[lower.tri(result$params_x$truth$Cov)]
+  # result$params_x$fit$Cov <- cov(log(x_samples_SparseDOSSA2 + 1e-5), method = "pear")
+  # result$params_x$fit$Cov_off_diag <- result$params_x$fit$Cov[lower.tri(result$params_x$fit$Cov)]
+
   l_results <- c(l_results, list(result))
 }
+save(l_results, file = paste0(dir_output, "l_results.RData"))
+load(paste0(dir_output, "l_results.RData"))
 ```
 
 # Fitting performance
 First, we evaluate SparseDOSSA2's fitting performance. Because of the non-identifiability of models for absolute abundances, we evaluate the induced parameters in the __relative abundance__ space. This involves 
 
 - Mean of per-feature positive log __relative abundance__ $\mu_x$.
+- Covariance of feature-feature log __relative abundance__ ($Cov(\log(x_j + 10^{-5}, x_k + 10^{-5})$.
 - Standard deviation of per-feature positive log __relative abundance__ $\sigma_x$.
 - For correlation, we evaluate the feature-feature __Spearman correlation__ $Corr_x$.
 
 The zero-inflation proportion can be estimated trivially so not visualized. 
 
-Maximum relative difference (across features) between the true and the estimated values for each parameter are visualized, across different tuning parameter $\lambda$ values. Row panels are arranged according to dimensions (sample size, number of features), and column panels are arranged across parameters ($\pi_0, \rho$). Unplotted panels haven't finished simulation run yet. Note that many runs encountered errors / took too long and got cancelled (not plotted), or did not converge (absolute difference $< 10^{-5}$, relative difference $<10^{-5}$) within the allowed maximum iteration number (500) (in grey color). These are discussed in the next section. Here we focus on the successful runs.
-
-Takeaways:
-
-- For each panel, if we use the smallest value across different $\lambda$s as the "best achievable" relative difference if we chose $\lambda$ through cross-validation, our method seems to perform reasonably well (relative difference $< 0.1$) in most cases.
-- For feature-feature Spearman correlations, model performs much worse as $p$ increases, which made sense to me.
-
-Questions:
-
-- How much of the difference between estimation and truth is due to randomness from sample size?
-    - To answer this, I can generate a total of $R$ different datasets for each simulation setting, and examine the distribution of model estimations across the datasets. This would give me a classical empirical bias/variance estimation table.
-- Factor in the fact that $\lambda$ needs to be estimated through CV
-    - Related, should we be concerned that performance is very "jiggly" across different $\lambda$s?
-    - Problem is CV can be very time consuming given the current time cost (see next section). Maybe switch to something faster like AIC?
+Maximum relative difference (across features) between the true and the estimated values for each parameter are visualized, across different tuning parameter $\lambda$ values. Row panels are arranged according to dimensions (sample size, number of features), and column panels are arranged across parameters ($\pi_0, \rho$). 
 
 ```{r set up simulation grid, fig.width=16, fig.height=8, echo=FALSE}
-tb_results_a <- 
-  c("mu", "sigma", "Corr") %>% 
-  purrr::map_dfr(function(param) {
-    tibble::tibble(
-      i_setup = tb_simulation$i_setup,
-      Param = param
-    ) %>% 
-      dplyr::left_join(
-        tibble::tibble(
-          i_setup = l_results %>% 
-            purrr::map_dbl("i"),
-          Truth = l_results %>% 
-            purrr::map(~.x$params_a$truth[[param]]),
-          SparseDOSSA2 = l_results %>% 
-            purrr::map(~.x$params_a$fit[[param]]),
-          Converge = l_results %>% 
-            purrr::map_lgl(~.x$converge$converge)
-        ),
-        by = "i_setup"
-      )
-  }) %>% 
-  dplyr::filter(!is.na(Converge)) %>% 
-  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>% 
-  dplyr::group_by(i_setup, Param) %>% 
-  dplyr::mutate(
-    abs_diff = {
-      if(is.null(Truth[[1]]))
-        NA
-      else
-        SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]])
-    },
-    rel_diff = {
-      if(is.null(Truth[[1]]))
-        NA
-      else
-        SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]], method = "rel")
-    }
-  ) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::left_join(tb_simulation, by = "i_setup") 
+get_abs_diff <- function(x, y) y - x
+get_rel_diff <- function(x, y, denom_c = 1e-5) (y - x) / (abs(x) + denom_c)
 
 tb_results_x <- 
-  c("mu", "sigma", "Corr") %>% 
+  c("mu", "sigma", "Corr_off_diag") %>% 
   purrr::map_dfr(function(param) {
     tibble::tibble(
       i_setup = tb_simulation$i_setup,
@@ -161,84 +182,210 @@ tb_results_x <-
   dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>% 
   dplyr::group_by(i_setup, Param) %>% 
   dplyr::mutate(
-    abs_diff = {
+    abs_diff = list({
       if(is.null(Truth[[1]]))
         NA
       else
-        SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]])
-    },
-    rel_diff = {
+        purrr::map2_dbl(as.vector(Truth[[1]]), as.vector(SparseDOSSA2[[1]]),
+                        ~ get_abs_diff(.x, .y), method = "abs")
+    }),
+    rel_diff = list({
       if(is.null(Truth[[1]]))
         NA
       else
-        SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]], method = "rel")
-    }
+        purrr::map2_dbl(as.vector(Truth[[1]]), as.vector(SparseDOSSA2[[1]]),
+                        ~ get_rel_diff(.x, .y), method = "rel")
+    })
   ) %>% 
   dplyr::ungroup() %>% 
   dplyr::left_join(tb_simulation, by = "i_setup") 
+# tb_results_x <- 
+#   c("mu", "sigma", "Sigma") %>% 
+#   purrr::map_dfr(function(param) {
+#     tibble::tibble(
+#       i_setup = tb_simulation$i_setup,
+#       Param = param
+#     ) %>% 
+#       dplyr::left_join(
+#         tibble::tibble(
+#           i_setup = l_results %>% 
+#             purrr::map_dbl("i"),
+#           Truth = l_results %>% 
+#             purrr::map(~.x$params_a$truth[[param]]),
+#           SparseDOSSA2 = l_results %>% 
+#             purrr::map(~.x$params_a$fit[[param]]),
+#           Converge = l_results %>% 
+#             purrr::map_lgl(~.x$converge$converge)
+#         ),
+#         by = "i_setup"
+#       )
+#   }) %>% 
+#   dplyr::filter(!is.na(Converge)) %>% 
+#   dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>% 
+#   dplyr::group_by(i_setup, Param) %>% 
+#   dplyr::mutate(
+#     abs_diff = {
+#       if(is.null(Truth[[1]]))
+#         NA
+#       else
+#         SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]])
+#     },
+#     rel_diff = {
+#       if(is.null(Truth[[1]]))
+#         NA
+#       else
+#         SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]], method = "rel")
+#     }
+#   ) %>% 
+#   dplyr::ungroup() %>% 
+#   dplyr::left_join(tb_simulation, by = "i_setup")
+```
 
-for(i_param in c("mu", "sigma", "Corr")) {
+## For each parameter, relative difference of the first element: 
+```{r one element, fig.width=15, fig.height=6, echo=FALSE}
+# plot one element
+for(i_param in c("mu", "sigma", "Corr_off_diag")) {
   p_fit <- tb_results_x %>% 
     dplyr::filter(Param == i_param) %>% 
-    ggplot(aes(x = log10(lambda), y = rel_diff, color = Converge)) +
+    dplyr::mutate(rel_diff_1 = rel_diff %>% purrr::map_dbl(1)) %>% 
+    ggplot(aes(x = log10(lambda), y = rel_diff_1, color = as.factor(R),
+               alpha = Converge)) +
     geom_point() +
     geom_line() +
-    scale_color_manual(values = c("TRUE"="black", "FALSE"="grey"), 
-                       na.value = "grey") +
+    # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7), 
+    #                    na.value = "grey") +
+    facet_grid(N_p ~ pi0_Sigma_off_diag, scales = "free_y") +
+    ggtitle(paste0(i_param, "_x"))
+  print(p_fit)
+}
+```
+
+## For each parameter, average relative absolute difference across elements: 
+```{r average, fig.width=15, fig.height=6, echo=FALSE}
+for(i_param in c("mu", "sigma", "Corr_off_diag")) {
+  p_fit <- tb_results_x %>% 
+    dplyr::filter(Param == i_param) %>% 
+    dplyr::mutate(rel_diff_mean = rel_diff %>% purrr::map_dbl(~mean(abs(.x)))) %>% 
+    ggplot(aes(x = log10(lambda), y = rel_diff_mean, color = as.factor(R),
+               alpha = as.character(Converge))) +
+    geom_point() +
+    geom_line() +
+    # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7)) +
     facet_grid(N_p ~ pi0_Sigma_off_diag) +
     ggtitle(paste0(i_param, "_x"))
   print(p_fit)
 }
 ```
 
-# Computation considerations
-I've switched to the [cubature](https://cran.r-project.org/web/packages/cubature/index.html) package for numeric integration. The `hcubature` method gives same results as `integrate` but gives successful fits when the latter gives errors. However, with this update a) there are still cases where errors occur, or fit takes abnormally long ($> 12$ hours) to converge, and b) some times EM does not converge. When it convergences successfully, the computation cost does not seem too bad. I think these require additional investigations:
+## For each parameter, max relative absolute difference across elements: 
+```{r max, fig.width=15, fig.height=6, echo=FALSE}
+for(i_param in c("mu", "Cov_off_diag", "sigma", "Corr_off_diag")) {
+  p_fit <- tb_results_x %>% 
+    dplyr::filter(Param == i_param) %>% 
+    dplyr::mutate(rel_diff_max = rel_diff %>% purrr::map_dbl(~max(abs(.x)))) %>% 
+    ggplot(aes(x = log10(lambda), y = rel_diff_max, color = as.factor(R),
+               alpha = Converge)) +
+    geom_point() +
+    geom_line() +
+    # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7), 
+    #                    na.value = "grey") +
+    facet_grid(N_p ~ pi0_Sigma_off_diag) +
+    ggtitle(paste0(i_param, "_x"))
+  print(p_fit)
+}
+```
 
-- Why's the method failing in certain cases?
-- What can cause the method to run slowly (seems to be a problem with `cubature`)?
-
-```{r diagnostics, fig.width=15, fig.height=8, echo=FALSE}
-tb_converge <- 
+```{r absolute abundance params, fig.width=15, fig.height=6, ecoh=FALSE}
+tb_results_a <- 
   tibble::tibble(
     i_setup = l_results %>% 
       purrr::map_dbl("i"),
+    Truth_sigma = l_results %>% 
+      purrr::map(~.x$params_a$truth[["sigma"]]),
+    Truth_Sigma = l_results %>% 
+      purrr::map(~solve(.x$params_a$truth[["Omega"]])),
+    Est_sigma = l_results %>% 
+      purrr::map(~.x$params_a$fit[["sigma"]]),
+    Est_Sigma = l_results %>% 
+      purrr::map(~solve(.x$params_a$fit[["Omega"]])),
     Converge = l_results %>% 
-      purrr::map_lgl(~.x$converge$converge),
-    N_iter = l_results %>% 
-      purrr::map_dbl(~.x$converge$n_iter),
-    Time = l_results %>% 
-      purrr::map_dbl("time"),
-    Diff = l_results %>% 
-      purrr::map("diff"),
-    Max_diff = Diff %>% 
-      purrr::map_dbl(~max(.x[3:4]))
+      purrr::map(~.x$converge$converge)
+  ) %>% 
+  dplyr::filter(!is.na(Converge)) %>% 
+  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>% 
+  dplyr::left_join(tb_simulation, by = "i_setup") 
+tb_results_a <- tb_results_a %>% 
+  dplyr::mutate(Truth_Var = Truth_sigma %>% 
+                  purrr::map2(Truth_Sigma,
+                              ~ diag(.x) %*% .y %*% diag(.x)),
+                Est_Var = Est_sigma %>% 
+                  purrr::map2(Est_Sigma,
+                              ~ diag(.x) %*% .y %*% diag(.x)))
+centralize_Omega <- function(Sigma) {
+  Omega <- solve(Sigma)
+  Omega - Omega %*% matrix(1, nrow = nrow(Omega), ncol = ncol(Omega)) %*% Omega / sum(Omega) 
+}
+tb_results_a <- tb_results_a %>% 
+  dplyr::mutate(Truth_Var_Identified = Truth_Var %>% 
+                  purrr::map(centralize_Omega),
+                Est_Var_Identified = Est_Var %>% 
+                  purrr::map(centralize_Omega))
+l_p <- (1:9) %>% 
+  purrr::map(
+    function(i_param) {
+      tb_results_a %>% 
+        dplyr::filter(pi0 == 0, p == 3) %>% 
+        dplyr::mutate(val = Est_Var_Identified %>% 
+                        purrr::map_dbl(~as.vector(.x)[i_param])) %>% 
+        ggplot(aes(x = log10(lambda), y = val, color = as.factor(R))) +
+        geom_point() +
+        geom_line() +
+        facet_grid(N_p ~ pi0_Sigma_off_diag)
+    }
   )
-tb_converge <- 
-  tb_simulation %>% 
-  dplyr::left_join(tb_converge, by = "i_setup") %>% 
-  dplyr::filter(i_setup <= max(tb_results_x$i_setup, na.rm = TRUE))
-p_time <- tb_converge %>% 
+```
+
+```{r check on likelihood?}
+l_results <- list()
+for(i_file in seq_along(result_files)) {
+  i <- result_files[i_file] %>%
+    gsub("result_", "", ., fixed = TRUE) %>%
+    gsub(".RData", "", ., fixed = TRUE) %>%
+    as.numeric
+  load(paste0(dir_output, result_files[i_file]))
+  load(paste0(dir_output, "fit_EM_", i, ".RData"))
+  result$i <- i
+  result$converge <- fit_EM$converge
+  result$diff <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$diff
+  result$params_x$truth$Corr_off_diag <- result$params_x$truth$Corr[lower.tri(result$params_x$truth$Corr)]
+  result$params_x$fit$Corr_off_diag <- result$params_x$fit$Corr[lower.tri(result$params_x$fit$Corr)]
+  result$l <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$l
+
+  l_results <- c(l_results, list(result))
+}
+save(l_results, file = paste0(dir_output, "l_results.RData"))
+load(paste0(dir_output, "l_results.RData"))
+
+tb_results_ll <- 
+    tibble::tibble(
+      i_setup = l_results %>% 
+        purrr::map_dbl("i"),
+      Converge = l_results %>% 
+            purrr::map_lgl(~.x$converge$converge),
+      ll = l_results %>% 
+            purrr::map_dbl("l")
+    )  %>% 
   dplyr::filter(!is.na(Converge)) %>% 
-  ggplot(aes(x = log10(lambda), y = Time, color = Converge)) +
-  geom_point() + geom_line() +
-  scale_color_manual(values = c("TRUE"="black", "FALSE"="grey")) +
-  facet_grid(N_p ~ pi0_Sigma_off_diag) +
-  ggtitle("Time to fit in min on 45 cores")
-p_iter <- tb_converge %>% 
-  dplyr::filter(!is.na(Converge)) %>% 
-  ggplot(aes(x = log10(lambda), y = N_iter, color = Converge)) +
-  geom_point() + geom_line() +
-  scale_color_manual(values = c("TRUE"="black", "FALSE"="grey")) +
-  facet_grid(N_p ~ pi0_Sigma_off_diag) +
-  ggtitle("Number of EM iterations")
-p_diff <- tb_converge %>% 
-  dplyr::filter(!is.na(Converge)) %>% 
-  ggplot(aes(x = log10(lambda), y = log10(Max_diff), color = Converge)) +
-  geom_point() + geom_line() +
-  scale_color_manual(values = c("TRUE"="black", "FALSE"="grey")) +
-  facet_grid(N_p ~ pi0_Sigma_off_diag) +
-  ggtitle("Difference at the end of iteration")
-print(p_time)
-print(p_iter)
-print(p_diff)
+  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>%
+  dplyr::left_join(tb_simulation, by = "i_setup") 
+
+tb_results_ll %>% 
+    ggplot(aes(x = log10(lambda), y = ll, color = as.factor(R),
+               alpha = Converge)) +
+    geom_point() +
+    geom_line() +
+    # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7), 
+    #                    na.value = "grey") +
+    facet_grid(N_p ~ pi0_Sigma_off_diag) +
+    ggtitle(paste0(i_param, "_a"))
 ```

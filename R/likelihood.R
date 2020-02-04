@@ -9,7 +9,7 @@ dx <- function(x,
                       pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
-  log_offset <- 0
+  # log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx,
                               center = log(offset_a),
@@ -56,7 +56,7 @@ log_dx <- function(x,
                          pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     return(-Inf)
-  log_offset <- 0
+  # log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx,
                               center = log(offset_a),
@@ -164,7 +164,7 @@ ea <- function(x,
                       pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
-  log_offset <- 0
+  # log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx, 
                               center = log(offset_a),
@@ -223,7 +223,7 @@ eloga <- function(x,
                       pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
-  log_offset <- 0
+  # log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx, 
                               center = log(offset_a),
@@ -282,7 +282,7 @@ eloga2 <- function(x,
                       pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
-  log_offset <- 0
+  # log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx, 
                               center = log(offset_a),

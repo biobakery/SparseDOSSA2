@@ -4,14 +4,23 @@
 \alias{SparseDOSSA2}
 \title{Sparse Data Observations for Simulating Synthetic Abundance v2}
 \usage{
-SparseDOSSA2(n_sample = NULL, n_feature = NULL, template = NULL,
-  same_features = FALSE, feature_feature_association = FALSE,
-  spike_metadata = NULL, spike_strength = NULL, spike_feature = NULL,
-  spike_discrete_bidirectional = TRUE, biomass = NULL,
-  read_depth = 50000, control = list(em = list(maxiter.outer = 1000,
-  maxiter.inner = 1000, reltol.outer = 1e-08, factr.inner = 1e+07), kd =
-  list(estimator = "Hscv"), copula = list(method = "spearman", random =
-  TRUE, R = 50)), verbose = TRUE)
+SparseDOSSA2(
+  n_sample = NULL,
+  n_feature = NULL,
+  template = NULL,
+  same_features = FALSE,
+  feature_feature_association = FALSE,
+  spike_metadata = NULL,
+  spike_strength = NULL,
+  spike_feature = NULL,
+  spike_discrete_bidirectional = TRUE,
+  biomass = NULL,
+  read_depth = 50000,
+  control = list(em = list(maxiter.outer = 1000, maxiter.inner = 1000, reltol.outer =
+    1e-08, factr.inner = 1e+07), kd = list(estimator = "Hscv"), copula = list(method =
+    "spearman", random = TRUE, R = 50)),
+  verbose = TRUE
+)
 }
 \arguments{
 \item{n_sample}{number of samples to simulate}
@@ -31,6 +40,9 @@ model the feature-feature association structure in the template dataset?}
 \item{control}{nested list of control parameters for the various model fitting components of SparseDOSSA2}
 
 \item{verbose}{}
+}
+\value{
+
 }
 \description{
 Sparse Data Observations for Simulating Synthetic Abundance v2

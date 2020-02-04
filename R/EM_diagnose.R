@@ -1,3 +1,14 @@
+#' Title
+#'
+#' @param data 
+#' @param params_init 
+#' @param control 
+#'
+#' @return
+#' @export
+#' @importFrom magrittr %>%
+#'
+#' @examples
 EM_diagnose <- function(data, 
                         params_init = NULL,
                         control = list()) {

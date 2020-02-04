@@ -4,8 +4,10 @@
 \alias{estimate_C}
 \title{Normal copula estimator for feature-feature association (correlation between the p_ijs)}
 \usage{
-estimate_C(feature_abd, control = list(method = "spearman", random =
-  TRUE, R = 50))
+estimate_C(
+  feature_abd,
+  control = list(method = "spearman", random = TRUE, R = 50)
+)
 }
 \arguments{
 \item{feature_abd}{feature x sample abundance table}

@@ -4,8 +4,12 @@
 \alias{estimate_featureParam}
 \title{EM algorithm estimator for per-feature parameters (prevalence, mean, variance)}
 \usage{
-estimate_featureParam(y_ij, n_i, control = list(maxiter.outer = 100,
-  maxiter.inner = 1000, reltol.outer = 1e-08, factr.inner = 1e+07))
+estimate_featureParam(
+  y_ij,
+  n_i,
+  control = list(maxiter.outer = 100, maxiter.inner = 1000, reltol.outer = 1e-08,
+    factr.inner = 1e+07)
+)
 }
 \arguments{
 \item{y_ij}{vector of per-feature read count across samples}

@@ -97,22 +97,27 @@ get_intLimits <- function(f,
                           center = 0, limit_max, limit_min, step_size,
                           lower_bound = -1000, upper_bound = 1000,
                           ...) {
-  vchange <- exp(seq(from = log(limit_max),
-                     to = log(limit_min),
-                     by = -log(step_size)))
-  vlim <- c(center - vchange,
-            center,
-            center + rev(vchange))
-  vlim <- vlim[exp(vlim) > 0] ## FIXME??
-  
-  vval <- f(vlim, ...)
-  if(any(vval < 0))
-    stop("There are negative values of f!")
-  vflag <- vval > 0
-  vindex <- which(vflag)
-  if(!any(vflag)) {
-    stop("Failed to detect positive f values!")
-  }
+  # while(TRUE) {
+    vchange <- exp(seq(from = log(limit_max),
+                       to = log(limit_min),
+                       by = -log(step_size)))
+    
+    vlim <- c(center - vchange,
+              center,
+              center + rev(vchange))
+    vlim <- vlim[exp(vlim) > 0] ## FIXME??
+    
+    vval <- f(vlim, ...)
+    if(any(vval < 0))
+      stop("There are negative values of f!")
+    vflag <- vval > 0
+    vindex <- which(vflag)
+  #   if(any(vflag)) 
+  #     break
+  # }
+  if(!any(vflag))
+    stop("f is not positive at any values!")
+    
   if(vflag[1]) {
     warning("f is already positive at maximum lower limit!")
     lower <- lower_bound

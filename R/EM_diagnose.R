@@ -60,6 +60,7 @@ EM_diagnose <- function(data,
       e_asums <- future.apply::future_vapply(
         seq_len(nrow(data)),
         function(i_sample) {
+          i_time <- Sys.time()
           if(i_iter == 1) offset_a <- 1
           else offset_a <- ll_easums[[i_iter - 1]][i_sample, 1]
           num <- ea(x = data[i_sample, , drop = TRUE],
@@ -101,9 +102,10 @@ EM_diagnose <- function(data,
                            denom$error),
                    "l" = l,
                    "eloga" = eloga_num$integral / denom$integral,
-                   "eloga2" = eloga2_num$integral / denom$integral))
+                   "eloga2" = eloga2_num$integral / denom$integral,
+                   "time" = Sys.time() - i_time))
         },
-        rep(0.0, 5)
+        rep(0.0, 6)
       ) %>% t()
     }
     ll_easums[[i_iter]] <- e_asums
@@ -143,6 +145,12 @@ EM_diagnose <- function(data,
                                   time = Sys.time() - time))
     params <- params_new
     
+    if(!is.null(control$debug)) {
+      res_tmp <- list(ll_easums = ll_easums, ll_params = ll_params)
+      save(res_tmp,
+           file = control$debug)
+    }
+           
     if(max(diff_abs) < control$abs_tol & max(diff_rel) < control$rel_tol) {
       converge <- TRUE
       break
@@ -165,9 +173,10 @@ control_EM <- function(lambda = 0.2,
                                              limit_max = 50,
                                              limit_min = 1e-10,
                                              step_size = 2,
-                                             rel.tol = 1e-6,
-                                             abs.tol = 1e-6),
-                       verbose = FALSE) {
+                                             rel_tol = 1e-6,
+                                             abs_tol = 0),
+                       verbose = FALSE,
+                       debug = NULL) {
   list(lambda = lambda,
        maxit = maxit,
        method = method,
@@ -175,5 +184,6 @@ control_EM <- function(lambda = 0.2,
        abs_tol = abs_tol,
        control_mcmc = control_mcmc,
        control_numint = control_numint,
-       verbose = verbose)
+       verbose = verbose,
+       debug = debug)
 }

@@ -96,7 +96,7 @@ get_sigmas <- function(x, eloga, eloga2, mu) {
 get_intLimits <- function(f, 
                           center = 0, limit_max, limit_min, step_size,
                           lower_bound = -1000, upper_bound = 1000,
-                          max_try = 10,
+                          max_try = 100,
                           ...) {
   i_try <- 0
   while(TRUE) { ## FIXME
@@ -117,7 +117,7 @@ get_intLimits <- function(f,
     if(any(vval < 0))
       stop("There are negative values of f!")
     vflag <- vval > 0
-    if(any(vflag))
+    if(sum(vflag) > 1)
       break
     
     step_size <- sqrt(step_size)

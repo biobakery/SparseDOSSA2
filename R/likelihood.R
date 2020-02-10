@@ -9,7 +9,7 @@ dx <- function(x,
                       pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
-  # log_offset <- 0
+  log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx,
                               center = log(offset_a),
@@ -25,7 +25,7 @@ dx <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
-                           nVec = 2,
+                           nVec = 100,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset)
   
@@ -56,7 +56,7 @@ log_dx <- function(x,
                          pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     return(-Inf)
-  # log_offset <- 0
+  log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx,
                               center = log(offset_a),
@@ -72,7 +72,7 @@ log_dx <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
-                           nVec = 2,
+                           nVec = 100,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset)
   
@@ -88,9 +88,9 @@ control_integrate <- function(limit_max = 50,
                               limit_min = 1e-5,
                               step_size = 2,
                               rel_tol = 1e-05,
-                              abs_tol = 1e-12,
+                              abs_tol = 0,
                               max_eval = 1e6,
-                              method = "pcubature",
+                              method = "hcubature",
                               jacobian = FALSE,
                               proper = TRUE,
                               only_value = TRUE) {
@@ -164,7 +164,7 @@ ea <- function(x,
                       pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
-  # log_offset <- 0
+  log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx, 
                               center = log(offset_a),
@@ -180,7 +180,7 @@ ea <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
-                           nVec = 2,
+                           nVec = 100,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset) 
   
@@ -223,7 +223,7 @@ eloga <- function(x,
                       pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
-  # log_offset <- 0
+  log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx, 
                               center = log(offset_a),
@@ -239,7 +239,7 @@ eloga <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
-                           nVec = 2,
+                           nVec = 100,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset)
   
@@ -282,7 +282,7 @@ eloga2 <- function(x,
                       pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   if(log_offset == -Inf) 
     stop("Something went wrong!")
-  # log_offset <- 0
+  log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx, 
                               center = log(offset_a),
@@ -298,7 +298,7 @@ eloga2 <- function(x,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
-                           nVec = 2,
+                           nVec = 100,
                            x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
                            log_offset = log_offset)
   

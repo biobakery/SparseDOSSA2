@@ -17,50 +17,67 @@ dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 
 ```{r setup cluster parameter}
 ncpus <- 45
-walltime <- 3600 * 24
+walltime <- 3600 * 4
 ```
 
 ```{r set up simulation grid}
-tb_simulation <- tidyr::crossing(
-  n = c(100, 1000, 10000),
-  p = c(3, 5, 10),
-  pi0 = c(0, 0.25, 0.5),
-  mu = c(0),
-  sigma = c(1),
-  Sigma_diag = c(1),
-  Sigma_off_diag = c(0, 0.25, -0.25),
-  n_r = c(1000000),
-  lambda = exp(seq(log(1e-4), log(10), length.out = 21)),
-  maxit = 500
-) %>% 
-  dplyr::mutate(i_setup = 1:(dplyr::n())) %>% 
-  dplyr::group_by(i_setup) %>% 
-  dplyr::mutate(params = list(pi0 = rep(pi0, p),
-                              mu = rep(mu, p),
-                              sigma = rep(sigma, p),
-                              Sigma = diag(rep(Sigma_diag, p)) -
-                                diag(rep(Sigma_off_diag, p)) +
-                                matrix(Sigma_off_diag, p, p)) %>% 
-                  list())
-njobs <- nrow(tb_simulation)
+# tb_simulation <- tidyr::crossing(
+#   n = c(100),
+#   p = c(3, 5, 10),
+#   pi0 = c(0, 0.25, 0.5),
+#   mu = c(0),
+#   sigma = c(1),
+#   Sigma_diag = c(1),
+#   Sigma_off_diag = c(0, 0.9, -0.1),
+#   n_r = c(1000000),
+#   maxit = 1000,
+#   R = seq_len(10)
+# ) %>%
+#   dplyr::mutate(i_sim = 1:(dplyr::n())) %>%
+#   dplyr::group_by(i_sim) %>%
+#   dplyr::mutate(params = list(pi0 = rep(pi0, p),
+#                               mu = rep(mu, p),
+#                               sigma = rep(sigma, p),
+#                               Sigma = diag(rep(Sigma_diag, p)) -
+#                                 diag(rep(Sigma_off_diag, p)) +
+#                                 matrix(Sigma_off_diag, p, p)) %>%
+#                   list()) %>%
+#   dplyr::ungroup()
+# set.seed(1)
+# l_sets <- seq_len(nrow(tb_simulation)) %>%
+#   purrr::map(function(i_sim) {
+#     i_tb_simulation <- tb_simulation[i_sim, ]
+#     params_truth <- i_tb_simulation$params[[1]]
+#     params_truth$Omega <- solve(params_truth$Sigma)
+# 
+#     a_samples_fit <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n,
+#                                                pi0 = params_truth$pi0,
+#                                                mu = params_truth$mu,
+#                                                sigma = params_truth$sigma,
+#                                                Omega = params_truth$Omega)
+#     return(a_samples_fit)
+#   })
+# save(l_sets, file = paste0(dir_output, "a_sets.RData"))
+# tb_simulation <- tb_simulation %>%
+#   dplyr::mutate(a_set = l_sets) %>%
+#   tidyr::crossing(lambda = exp(seq(log(1e-3), log(1), length.out = 7))) %>%
+#   dplyr::mutate(i_setup = seq_len(dplyr::n()))
+# save(tb_simulation, file = paste0(dir_output, "tb_simulation.RData"))
+load(paste0(dir_output, "tb_simulation.RData"))
 # njobs <- 10
+njobs <- nrow(tb_simulation)
 ```
 
 ```{r simulation task}
 one_job <- function(i_job) {
   future::plan(future::multicore)
-  set.seed(i_job)
+  # set.seed(i_job)
   i_tb_simulation <- tb_simulation[i_job, ]
   params_truth <- i_tb_simulation$params[[1]]
   params_truth$Omega <- solve(params_truth$Sigma)
 
   # simulate data to fit on
-  a_samples_fit <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n,
-                                             pi0 = params_truth$pi0,
-                                             mu = params_truth$mu,
-                                             sigma = params_truth$sigma,
-                                             Omega = params_truth$Omega)
-  save(a_samples_fit, file = paste0(dir_output, "a_samples_fit_", i_job, ".RData"))
+  a_samples_fit <- i_tb_simulation$a_set[[1]]
   a_samples_fit <- a_samples_fit[!apply(a_samples_fit == 0, 1, all), ]
   x_samples_fit <- t(apply(a_samples_fit, 1, function(x) x / sum(x)))
 
@@ -70,12 +87,14 @@ one_job <- function(i_job) {
     data = x_samples_fit,
     control = list(lambda = i_tb_simulation$lambda,
                    maxit = i_tb_simulation$maxit,
-                   abs_tol = 1e-5,
-                   rel_tol = 1e-5,
-                   verbose = FALSE,
+                   abs_tol = 1e-3,
+                   rel_tol = 1e-2,
                    control_numint = list(limit_max = 1400,
                                          limit_min = 1e-14,
-                                         method = "hcubature")))
+                                         method = "hcubature",
+                                         abs_tol = 0),
+                   verbose = TRUE,
+                   debug = paste0(dir_output, "debug_", i_job, ".RData")))
   save(fit_EM, file = paste0(dir_output, "fit_EM_", i_job, ".RData"))
   time <- Sys.time() - time_start
   
@@ -120,14 +139,75 @@ future.batchtools::batchtools_slurm %>%
   future::plan(resources = list(ncpus = ncpus,
                                 walltime = walltime),
                template = "sma")
+result_files <- list.files(dir_output, pattern = "^result")
+i_results <- result_files %>% 
+  gsub("result_", "", ., fixed = TRUE) %>% 
+  gsub(".RData", "", ., fixed = TRUE) %>% 
+  as.numeric()
 l_results <- list()
-for(i_job in seq_len(njobs)) {
+for(i_job in setdiff(seq_len(njobs), i_results)) {
   l_results[[i_job]] <- future::future(one_job(i_job))
 }
-for(i_job in seq_len(njobs)) {
-  l_results[[i_job]] <- try(future::value(l_results[[i_job]]))
-}
 save(l_results, file = paste0(dir_output, "l_results.RData"))
-time_end <- Sys.time()
-print(time_end - time_start)
+```
+
+```{r debug}
+debug_files <- list.files(dir_output, pattern = "^debug_")
+i_debug <- debug_files %>% 
+  gsub("debug_", "", ., fixed = TRUE) %>% 
+  gsub(".RData", "", ., fixed = TRUE) %>% 
+  as.numeric()
+setdiff(i_debug, i_results)
+
+one_debug <- function(i_job) {
+  
+  load(paste0("/n/hutlab11_nobackup/users/syma/sparsedossa_update/results/Test_fitting/debug_", 
+              i_job, ".RData"))
+  ll_easums <- res_tmp$ll_easums
+  ll_params <- res_tmp$ll_params
+  tb_max_diff_easums <- 
+    seq_along(ll_easums)[-1] %>% 
+    purrr::map_dbl(
+      ~ SparseDOSSA2:::get_diff(ll_easums[[.x]][, 1],
+                                ll_easums[[.x - 1]][, 1],
+                                "rel") %>% 
+        max
+    ) %>% 
+    tibble::tibble(diff = .,
+                   i = seq_along(ll_easums)[-1])
+  
+  tb_max_diff_params <- ll_params %>% 
+    purrr::map_dfr(
+      ~ tibble::tibble(sigma = .x$diff[3],
+                       Sigma = .x$diff[4])
+    ) %>% 
+    dplyr::mutate(i = seq_along(ll_easums))
+  
+  p1 <- tb_max_diff_easums %>% 
+    ggplot(aes(x = i,
+               y = diff)) +
+    geom_point() + geom_line() +
+    ggtitle(i_job)
+  
+  p2 <- tb_max_diff_params %>% 
+    ggplot(aes(x = i,
+               y = sigma)) +
+    geom_point() + geom_line()
+  
+  p3 <- tb_max_diff_params %>% 
+    ggplot(aes(x = i,
+               y = Sigma)) +
+    geom_point() + geom_line()
+  
+  cowplot::plot_grid(p1, p2, p3,
+                     nrow = 1) %>% 
+    return()
+}
+
+pdf(paste0(dir_output, "debug.pdf"),
+    width = 12, height = 4)
+for(i_job in setdiff(i_debug, i_results)) {
+    print(one_debug(i_job))
+}
+dev.off()
 ```

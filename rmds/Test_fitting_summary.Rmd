@@ -1,5 +1,5 @@
 ---
-title: "Summary of simulation results (a space_"
+title: "Does lambda matter?"
 author: "Siyuan Ma"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
@@ -14,16 +14,12 @@ library(ggplot2)
 dir_output <- paste0(dir_project, "results/Test_fitting/")
 dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 ```
-# Simulation set up
-
-- Sample size $n \in \{100, 1000\}$ (only $n = 100$ results fitted).
-- Number of features $p \in \{3, 5, 10\}$.
-- Per-feature zero inflation probability $\pi0 \in \{0, 0.25, 0.5\}$ (same per-feautre parameters for each feature).
-- Mean of per-feature positive log __absolute abundance__ $= 0$.
-- Standard deviation of per-feature positive log __absolute abundance__ $= 1$.
-- Feature-feature __correlation in the copula component__ $\rho \in \{-0.25, 0, 0.25\}$
 
 ```{r read in files, include=FALSE}
+rescale_log <- function(x) {
+  log10(abs(x)) * sign(x)
+}
+
 load(paste0(dir_output, "tb_simulation.RData"))
 tb_simulation <- tb_simulation %>% 
   dplyr::arrange(i_setup) %>% 
@@ -35,152 +31,194 @@ tb_simulation <- tb_simulation %>%
                   forcats:::as_factor())
 
 result_files <- list.files(dir_output, pattern = "^result")
-
-# fit_files <- list.files(dir_output, pattern = "^fit")
-# is_results <- result_files %>% 
-#   gsub("result_", "", ., fixed = TRUE) %>% 
-#   gsub(".RData", "", ., fixed = TRUE)
-# is_fits <- fit_files %>% 
-#   gsub("fit_EM_", "", ., fixed = TRUE) %>% 
-#   gsub(".RData", "", ., fixed = TRUE)
-# l_err <- list()
-# l_log <- list()
-# for(i_dir in batchtools_dir) {
-#   i_job <- batchtools::loadRegistry(i_dir, make.default = FALSE, writeable = FALSE)
-#   l_err <- c(l_err,
-#              list(batchtools::getErrorMessages(id = 1, reg = i_job)))
-#   l_log <- c(l_log, 
-#              list(batchtools::getLog(id = 1, reg = i_job)))
+i_results <- result_files %>% 
+  gsub("result_", "", ., fixed = TRUE) %>% 
+  gsub(".RData", "", ., fixed = TRUE) %>% 
+  as.numeric()
+fit_files <- list.files(dir_output, pattern = "^fit")
+i_fit <- fit_files %>% 
+  gsub("fit_EM_", "", ., fixed = TRUE) %>% 
+  gsub(".RData", "", ., fixed = TRUE) %>% 
+  as.numeric()
+setdiff(i_fit, i_results)[1]
+# l_results <- list()
+# for(i_file in seq_along(result_files)) {
+#   i <- result_files[i_file] %>%
+#     gsub("result_", "", ., fixed = TRUE) %>%
+#     gsub(".RData", "", ., fixed = TRUE) %>%
+#     as.numeric
+#   load(paste0(dir_output, result_files[i_file]))
+#   load(paste0(dir_output, "fit_EM_", i, ".RData"))
+#   result$i <- i
+#   result$converge <- fit_EM$converge
+#   result$diff <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$diff
+#   result$params_x$truth$Corr_off_diag <- result$params_x$truth$Corr[lower.tri(result$params_x$truth$Corr)]
+#   result$params_x$fit$Corr_off_diag <- result$params_x$fit$Corr[lower.tri(result$params_x$fit$Corr)]
+#   result$l <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$l
+# 
+#   l_results <- c(l_results, list(result))
 # }
-# job <- batchtools::loadRegistry(".future/20200124_073916-iF3zj9/batchtools_999359202/")
-# fit_files <- list.files(dir_output, pattern = "^fit")
-# info_result_files <- file.info(paste0(dir_output, result_files))
-# info_fit_files <- file.info(paste0(dir_output, fit_files))
-# result_files <- result_files[info_result_files$mtime > as.POSIXct("2020-01-22 00:00:00 UTC")]
-# fit_files <- fit_files[info_fit_files$mtime > as.POSIXct("2020-01-22 00:00:00 UTC")]
-# i_result_files <- result_files %>%
-#   gsub("result_", "", ., fixed = TRUE) %>%
-#   gsub(".RData", "", ., fixed = TRUE)
-# i_fit_files <- fit_files %>%
-#   gsub("fit_EM_", "", ., fixed = TRUE) %>%
-#   gsub(".RData", "", ., fixed = TRUE)
-# for(i_file in setdiff(i_fit_files, i_result_files)) {
-#   i_file <- as.numeric(i_file)
-#   load(paste0(dir_output, "fit_EM_", i_file, ".RData"))
-# 
-#   i_tb_simulation <- tb_simulation[i_file, ]
-#   params_truth <- i_tb_simulation$params[[1]]
-#   params_truth$Omega <- solve(params_truth$Sigma)
-# 
-#   a_samples <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n_r,
-#                                          pi0 = params_truth$pi0,
-#                                          mu = params_truth$mu,
-#                                          sigma = params_truth$sigma,
-#                                          Omega = params_truth$Omega)
-#   a_samples <- a_samples[!apply(a_samples == 0, 1, all), ]
-#   x_samples <- t(apply(a_samples, 1, function(x) x / sum(x)))
-#   params_fit <- fit_EM$ll_params[[length(fit_EM$ll_params)]]
-#   a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = i_tb_simulation$n_r,
-#                                                       pi0 = params_fit$pi0,
-#                                                       mu = params_fit$mu,
-#                                                       sigma = params_fit$sigma,
-#                                                       Omega = params_fit$Omega)
-#   a_samples_SparseDOSSA2 <- a_samples_SparseDOSSA2[!apply(a_samples_SparseDOSSA2 == 0, 1, all), ]
-#   x_samples_SparseDOSSA2 <- t(apply(a_samples_SparseDOSSA2, 1, function(x) x / sum(x)))
-# 
-#   params_x <- list(x_samples, x_samples_SparseDOSSA2) %>%
-#     purrr::map(~ c(SparseDOSSA2:::get_marginals(.x) %>% as.data.frame(),
-#                    list(Corr = cor(.x, method = "spear")))) %>%
-#     set_names(c("truth", "fit"))
-# }
-
-
-l_results <- list()
-for(i_file in seq_along(result_files)) {
-  i <- result_files[i_file] %>%
-    gsub("result_", "", ., fixed = TRUE) %>%
-    gsub(".RData", "", ., fixed = TRUE) %>%
-    as.numeric
-  load(paste0(dir_output, result_files[i_file]))
-  load(paste0(dir_output, "fit_EM_", i, ".RData"))
-  result$i <- i
-  result$converge <- fit_EM$converge
-  result$diff <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$diff
-  result$params_x$truth$Corr_off_diag <- result$params_x$truth$Corr[lower.tri(result$params_x$truth$Corr)]
-  result$params_x$fit$Corr_off_diag <- result$params_x$fit$Corr[lower.tri(result$params_x$fit$Corr)]
-  result$l <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$l
-
-  # i_tb_simulation <- tb_simulation[i, ]
-  # params_truth <- i_tb_simulation$params[[1]]
-  # params_truth$Omega <- solve(params_truth$Sigma)
-
-  # a_samples <- SparseDOSSA2:::rcopulasso(n = 100000,
-  #                                        pi0 = params_truth$pi0,
-  #                                        mu = params_truth$mu,
-  #                                        sigma = params_truth$sigma,
-  #                                        Omega = params_truth$Omega)
-  # a_samples <- a_samples[!apply(a_samples == 0, 1, all), ]
-  # x_samples <- t(apply(a_samples, 1, function(x) x / sum(x)))
-  # params_fit <- fit_EM$ll_params[[length(fit_EM$ll_params)]]
-  # a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = 100000,
-  #                                                     pi0 = params_fit$pi0,
-  #                                                     mu = params_fit$mu,
-  #                                                     sigma = params_fit$sigma,
-  #                                                     Omega = params_fit$Omega)
-  # a_samples_SparseDOSSA2 <- a_samples_SparseDOSSA2[!apply(a_samples_SparseDOSSA2 == 0, 1, all), ]
-  # x_samples_SparseDOSSA2 <- t(apply(a_samples_SparseDOSSA2, 1, function(x) x / sum(x)))
-  # 
-  # result$params_x$truth$Cov <- cov(log(x_samples + 1e-5), method = "pear")
-  # result$params_x$truth$Cov_off_diag <- result$params_x$truth$Cov[lower.tri(result$params_x$truth$Cov)]
-  # result$params_x$fit$Cov <- cov(log(x_samples_SparseDOSSA2 + 1e-5), method = "pear")
-  # result$params_x$fit$Cov_off_diag <- result$params_x$fit$Cov[lower.tri(result$params_x$fit$Cov)]
-
-  l_results <- c(l_results, list(result))
-}
-save(l_results, file = paste0(dir_output, "l_results.RData"))
+# save(l_results, file = paste0(dir_output, "l_results.RData"))
 load(paste0(dir_output, "l_results.RData"))
 ```
 
-# Fitting performance
-First, we evaluate SparseDOSSA2's fitting performance. Because of the non-identifiability of models for absolute abundances, we evaluate the induced parameters in the __relative abundance__ space. This involves 
+# Does varying $\lambda$ actually change model esitmation?
+First let's recap our model parameterization:
 
-- Mean of per-feature positive log __relative abundance__ $\mu_x$.
-- Covariance of feature-feature log __relative abundance__ ($Cov(\log(x_j + 10^{-5}, x_k + 10^{-5})$.
-- Standard deviation of per-feature positive log __relative abundance__ $\sigma_x$.
-- For correlation, we evaluate the feature-feature __Spearman correlation__ $Corr_x$.
+\begin{align}
+f_A(a_1, \dots, a_p) &= \prod f_{A_j}(a_j | \pi_j, \mu_j, \sigma_j) \times f_U(F_{A_1}(a_1), \dots, F_{A_p}(a_p) | \Omega)
+\end{align}
 
-The zero-inflation proportion can be estimated trivially so not visualized. 
+* $f_{A_j}(a_j | \pi_j, \mu_j, \sigma_j)$ are zero-inflated log normal marginals 
+* $f_U(u_1, \dots, u_p | \Omega)$ is Gaussian copula for specifying correlation structure between $A_j$.
 
-Maximum relative difference (across features) between the true and the estimated values for each parameter are visualized, across different tuning parameter $\lambda$ values. Row panels are arranged according to dimensions (sample size, number of features), and column panels are arranged across parameters ($\pi_0, \rho$). 
+When all $\pi_j$ are zeros, i.e., there is no zero inflation, this model simplifies into logistic multivariate normal model. For the logistic MVN, the induced pdf for $X (= \frac{A}{\sum A})$ is analytical [Fang et al., 2017](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5510714/):
 
-```{r set up simulation grid, fig.width=16, fig.height=8, echo=FALSE}
+\begin{align}
+f_X &= (2 \pi)^{-\frac{p - 1}{2}} \left(\frac{|\Omega^*|}{1_p^\prime \Omega^* 1_p}\right)^{\frac{1}{2}}\exp\left\{-\frac{1}{2}(F_0 \ln x - F_0 \mu)^\prime \left(\Omega^* - \frac{\Omega^* 1_p 1_p^\prime \Omega^*}{1^\prime_p \Omega^* 1_p}\right)(F_0 \ln x - F_0 \mu)\right\}
+\end{align}
+
+Where $\Omega^* = \text{diag}(1/\sigma_1, \dots, 1/\sigma_p) \cdot \Omega^* \cdot \text{diag}(1/\sigma_1, \dots, 1/\sigma_p)$ is the covariance matrix for $\log A$ in this setting. $F_0 = I - \frac{1}{n}1_p 1_p^\prime$. We use this special case to study the choice of $\lambda$, which enforces different sparsity in $\hat{\Omega}$, on our model estimations.
+
+We plot the data log-likelihood $\frac{1}{n}\log \sum f_X(x_i | \hat{\mu}, \hat{\sigma}_\lambda, \hat{\Omega}_\lambda)$ across different $\lambda$s (note that $\hat{\mu}$ does not change with $\lambda$). It seems that the likelihood does not really change with $\lambda$. This lead me to think that maybe even though $\lambda$ leads to different $\hat{\sigma}_\lambda, \hat{\Omega}_\lambda$, together they might still induce the same $f_X$. 
+
+```{r log likelihood, fig.width=15, fig.height=12, echo = FALSE}
+tb_results_ll <-
+    tibble::tibble(
+      i_setup = l_results %>%
+        purrr::map_dbl("i"),
+      Converge = l_results %>%
+            purrr::map_lgl(~.x$converge$converge),
+      ll = l_results %>%
+            purrr::map_dbl("l")
+    )  %>%
+  dplyr::filter(!is.na(Converge)) %>%
+  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>%
+  dplyr::left_join(tb_simulation, by = "i_setup")
+
+p_l <- tb_results_ll %>%
+  dplyr::filter(pi0 == 0) %>%
+  ggplot(aes(x = log10(lambda), y = ll, color = as.factor(R))) +
+  geom_point() +
+  geom_line() +
+  # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7),
+  #                    na.value = "grey") +
+  facet_wrap( ~ N_p + pi0_Sigma_off_diag, scales = "free_y", ncol = 3) +
+  ggtitle("Log likelihood")
+print(p_l)
+```
+
+The terms in $f_X$ that involves $\sigma$ and $\Omega$ are the scalar $c = \frac{|\Omega^*|}{1_p^\prime \Omega^* 1_p}$ and the matrix $C = \Omega^* - \frac{\Omega^* 1_p 1_p^\prime \Omega^*}{1^\prime_p \Omega^* 1_p}$, so I plotted $\hat{c}_\lambda$, $\hat{C}_{\lambda, 11}$, and $\hat{C}_{\lambda, 12}$ as well.
+
+The most noticeable variation is for $\hat{C}_{\lambda, 12}$ in the scenario of $n = 100, p = 10$. As $\lambda$ increases $\hat{C}_{\lambda, 12}$ from different simulation runs seem to be converging, presumably due to $\hat{\Omega}_\lambda$ being forced to diagonal. Going back the log likelihood plots, this is also the scenario where there are indeed noticeable decrease in the likelihood as well!
+
+```{r absolute abundance params, fig.width=15, fig.height=12, echo=FALSE}
+centralize_Omega <- function(Sigma) {
+  Omega <- solve(Sigma)
+  Omega - Omega %*% matrix(1, nrow = nrow(Omega), ncol = ncol(Omega)) %*% Omega / sum(Omega)
+}
+normalize_Omega <- function(Sigma) {
+  Omega <- solve(Sigma)
+  det(Omega) / sum(Omega)
+}
+#
+tb_results_a <-
+  tibble::tibble(
+    i_setup = l_results %>%
+      purrr::map_dbl("i"),
+    Est_sigma = l_results %>%
+      purrr::map(~.x$params_a$fit[["sigma"]]),
+    Est_Sigma = l_results %>%
+      purrr::map(~solve(.x$params_a$fit[["Omega"]])),
+    Converge = l_results %>%
+      purrr::map(~.x$converge$converge)
+  ) %>%
+  dplyr::filter(!is.na(Converge)) %>%
+  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>%
+  dplyr::left_join(tb_simulation, by = "i_setup") %>%
+  dplyr::filter(pi0 == 0) %>%
+  dplyr::mutate(Est_Var = Est_sigma %>%
+                  purrr::map2(Est_Sigma,
+                              ~ diag(.x) %*% .y %*% diag(.x)),
+                Est_Var_Identified = Est_Var %>%
+                  purrr::map(centralize_Omega),
+                Est_Var_Norm = Est_Var %>%
+                  purrr::map_dbl(normalize_Omega)) %>%
+  dplyr::mutate(Ele_11 = Est_Var_Identified %>%
+                  purrr::map_dbl(~.x[1, 1]),
+                Ele_12 = Est_Var_Identified %>%
+                  purrr::map_dbl(~.x[1, 2]))
+# 
+p_11 <-  tb_results_a %>%
+  dplyr::filter(pi0 == 0) %>%
+  ggplot(aes(x = log10(lambda), y = Ele_11, color = as.factor(R))) +
+  geom_point() +
+  geom_line() +
+  facet_wrap( ~ N_p + pi0_Sigma_off_diag, scales = "free_y", ncol = 3) +
+  ggtitle("C_11")
+
+p_12 <-  tb_results_a %>%
+  dplyr::filter(pi0 == 0) %>%
+  ggplot(aes(x = log10(lambda), y = Ele_12, color = as.factor(R))) +
+  geom_point() +
+  geom_line() +
+  facet_wrap( ~ N_p + pi0_Sigma_off_diag, scales = "free_y", ncol = 3) +
+  ggtitle("C_12")
+
+p_norm <-  tb_results_a %>%
+  dplyr::filter(pi0 == 0) %>%
+  ggplot(aes(x = log10(lambda), y = Est_Var_Norm, color = as.factor(R))) +
+  geom_point() +
+  geom_line() +
+  facet_wrap( ~ N_p + pi0_Sigma_off_diag, scales = "free_y", ncol = 3) +
+  ggtitle("c")
+
+print(p_norm)
+print(p_11)
+print(p_12)
+```
+
+# Conclusion
+
+So it seems in a lot of situations, $\hat{\sigma}_\lambda$ can adapt to $\hat{\Omega}_\lambda$, inducing the same $f_X(\cdot|\hat{\sigma}_\lambda, \hat{\Omega}_\lambda)$. I think this goes back to the notion of using $L_1$ to solve unidentifiability - if the penalization is only picking one solution out of an equivalence class, then switching $\lambda$ is just picking out different solutions from the same class, hence model performance such as likelihood should not change?
+
+Of course - penalization in this context also has utility when $p \geq n$. In that context maybe indeed varying $\lambda$ can pick a better model?
+
+# Full set of fitting performance
+
+The run on $n = 1000$ scenarios also finished running, with quite some cases that timed out. I'll have to debug more on that. But on the finished results (plotted are the relative difference between the first element of estimated $X$ mean, variance, and Spearman correlation versus the truth: 
+
+*Relative difference does decrease with sample size, which is good news? 
+*It is however concerning that the correlation of $X$ was estimated so wrong when $p = 10$, too.
+
+```{r set up simulation grid, fig.width=16, fig.height=12, echo=FALSE}
 get_abs_diff <- function(x, y) y - x
 get_rel_diff <- function(x, y, denom_c = 1e-5) (y - x) / (abs(x) + denom_c)
 
-tb_results_x <- 
-  c("mu", "sigma", "Corr_off_diag") %>% 
+tb_results_x <-
+  c("mu", "sigma", "Corr_off_diag") %>%
   purrr::map_dfr(function(param) {
     tibble::tibble(
       i_setup = tb_simulation$i_setup,
       Param = param
-    ) %>% 
+    ) %>%
       dplyr::left_join(
         tibble::tibble(
-          i_setup = l_results %>% 
+          i_setup = l_results %>%
             purrr::map_dbl("i"),
-          Truth = l_results %>% 
+          Truth = l_results %>%
             purrr::map(~.x$params_x$truth[[param]]),
-          SparseDOSSA2 = l_results %>% 
+          SparseDOSSA2 = l_results %>%
             purrr::map(~.x$params_x$fit[[param]]),
-          Converge = l_results %>% 
+          Converge = l_results %>%
             purrr::map_lgl(~.x$converge$converge)
         ),
         by = "i_setup"
       )
-  }) %>% 
-  dplyr::filter(!is.na(Converge)) %>% 
-  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>% 
-  dplyr::group_by(i_setup, Param) %>% 
+  }) %>%
+  dplyr::filter(!is.na(Converge)) %>%
+  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>%
+  dplyr::group_by(i_setup, Param) %>%
   dplyr::mutate(
     abs_diff = list({
       if(is.null(Truth[[1]]))
@@ -196,196 +234,25 @@ tb_results_x <-
         purrr::map2_dbl(as.vector(Truth[[1]]), as.vector(SparseDOSSA2[[1]]),
                         ~ get_rel_diff(.x, .y), method = "rel")
     })
-  ) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::left_join(tb_simulation, by = "i_setup") 
-# tb_results_x <- 
-#   c("mu", "sigma", "Sigma") %>% 
-#   purrr::map_dfr(function(param) {
-#     tibble::tibble(
-#       i_setup = tb_simulation$i_setup,
-#       Param = param
-#     ) %>% 
-#       dplyr::left_join(
-#         tibble::tibble(
-#           i_setup = l_results %>% 
-#             purrr::map_dbl("i"),
-#           Truth = l_results %>% 
-#             purrr::map(~.x$params_a$truth[[param]]),
-#           SparseDOSSA2 = l_results %>% 
-#             purrr::map(~.x$params_a$fit[[param]]),
-#           Converge = l_results %>% 
-#             purrr::map_lgl(~.x$converge$converge)
-#         ),
-#         by = "i_setup"
-#       )
-#   }) %>% 
-#   dplyr::filter(!is.na(Converge)) %>% 
-#   dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>% 
-#   dplyr::group_by(i_setup, Param) %>% 
-#   dplyr::mutate(
-#     abs_diff = {
-#       if(is.null(Truth[[1]]))
-#         NA
-#       else
-#         SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]])
-#     },
-#     rel_diff = {
-#       if(is.null(Truth[[1]]))
-#         NA
-#       else
-#         SparseDOSSA2:::get_diff(Truth[[1]], SparseDOSSA2[[1]], method = "rel")
-#     }
-#   ) %>% 
-#   dplyr::ungroup() %>% 
-#   dplyr::left_join(tb_simulation, by = "i_setup")
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::left_join(tb_simulation, by = "i_setup")
 ```
 
-## For each parameter, relative difference of the first element: 
-```{r one element, fig.width=15, fig.height=6, echo=FALSE}
+```{r one element, fig.width=15, fig.height=12, echo=FALSE}
 # plot one element
 for(i_param in c("mu", "sigma", "Corr_off_diag")) {
-  p_fit <- tb_results_x %>% 
-    dplyr::filter(Param == i_param) %>% 
-    dplyr::mutate(rel_diff_1 = rel_diff %>% purrr::map_dbl(1)) %>% 
+  p_fit <- tb_results_x %>%
+    dplyr::filter(Param == i_param) %>%
+    dplyr::mutate(rel_diff_1 = rel_diff %>% purrr::map_dbl(1)) %>%
     ggplot(aes(x = log10(lambda), y = rel_diff_1, color = as.factor(R),
                alpha = Converge)) +
     geom_point() +
     geom_line() +
-    # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7), 
+    # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7),
     #                    na.value = "grey") +
     facet_grid(N_p ~ pi0_Sigma_off_diag, scales = "free_y") +
     ggtitle(paste0(i_param, "_x"))
   print(p_fit)
 }
-```
-
-## For each parameter, average relative absolute difference across elements: 
-```{r average, fig.width=15, fig.height=6, echo=FALSE}
-for(i_param in c("mu", "sigma", "Corr_off_diag")) {
-  p_fit <- tb_results_x %>% 
-    dplyr::filter(Param == i_param) %>% 
-    dplyr::mutate(rel_diff_mean = rel_diff %>% purrr::map_dbl(~mean(abs(.x)))) %>% 
-    ggplot(aes(x = log10(lambda), y = rel_diff_mean, color = as.factor(R),
-               alpha = as.character(Converge))) +
-    geom_point() +
-    geom_line() +
-    # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7)) +
-    facet_grid(N_p ~ pi0_Sigma_off_diag) +
-    ggtitle(paste0(i_param, "_x"))
-  print(p_fit)
-}
-```
-
-## For each parameter, max relative absolute difference across elements: 
-```{r max, fig.width=15, fig.height=6, echo=FALSE}
-for(i_param in c("mu", "Cov_off_diag", "sigma", "Corr_off_diag")) {
-  p_fit <- tb_results_x %>% 
-    dplyr::filter(Param == i_param) %>% 
-    dplyr::mutate(rel_diff_max = rel_diff %>% purrr::map_dbl(~max(abs(.x)))) %>% 
-    ggplot(aes(x = log10(lambda), y = rel_diff_max, color = as.factor(R),
-               alpha = Converge)) +
-    geom_point() +
-    geom_line() +
-    # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7), 
-    #                    na.value = "grey") +
-    facet_grid(N_p ~ pi0_Sigma_off_diag) +
-    ggtitle(paste0(i_param, "_x"))
-  print(p_fit)
-}
-```
-
-```{r absolute abundance params, fig.width=15, fig.height=6, ecoh=FALSE}
-tb_results_a <- 
-  tibble::tibble(
-    i_setup = l_results %>% 
-      purrr::map_dbl("i"),
-    Truth_sigma = l_results %>% 
-      purrr::map(~.x$params_a$truth[["sigma"]]),
-    Truth_Sigma = l_results %>% 
-      purrr::map(~solve(.x$params_a$truth[["Omega"]])),
-    Est_sigma = l_results %>% 
-      purrr::map(~.x$params_a$fit[["sigma"]]),
-    Est_Sigma = l_results %>% 
-      purrr::map(~solve(.x$params_a$fit[["Omega"]])),
-    Converge = l_results %>% 
-      purrr::map(~.x$converge$converge)
-  ) %>% 
-  dplyr::filter(!is.na(Converge)) %>% 
-  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>% 
-  dplyr::left_join(tb_simulation, by = "i_setup") 
-tb_results_a <- tb_results_a %>% 
-  dplyr::mutate(Truth_Var = Truth_sigma %>% 
-                  purrr::map2(Truth_Sigma,
-                              ~ diag(.x) %*% .y %*% diag(.x)),
-                Est_Var = Est_sigma %>% 
-                  purrr::map2(Est_Sigma,
-                              ~ diag(.x) %*% .y %*% diag(.x)))
-centralize_Omega <- function(Sigma) {
-  Omega <- solve(Sigma)
-  Omega - Omega %*% matrix(1, nrow = nrow(Omega), ncol = ncol(Omega)) %*% Omega / sum(Omega) 
-}
-tb_results_a <- tb_results_a %>% 
-  dplyr::mutate(Truth_Var_Identified = Truth_Var %>% 
-                  purrr::map(centralize_Omega),
-                Est_Var_Identified = Est_Var %>% 
-                  purrr::map(centralize_Omega))
-l_p <- (1:9) %>% 
-  purrr::map(
-    function(i_param) {
-      tb_results_a %>% 
-        dplyr::filter(pi0 == 0, p == 3) %>% 
-        dplyr::mutate(val = Est_Var_Identified %>% 
-                        purrr::map_dbl(~as.vector(.x)[i_param])) %>% 
-        ggplot(aes(x = log10(lambda), y = val, color = as.factor(R))) +
-        geom_point() +
-        geom_line() +
-        facet_grid(N_p ~ pi0_Sigma_off_diag)
-    }
-  )
-```
-
-```{r check on likelihood?}
-l_results <- list()
-for(i_file in seq_along(result_files)) {
-  i <- result_files[i_file] %>%
-    gsub("result_", "", ., fixed = TRUE) %>%
-    gsub(".RData", "", ., fixed = TRUE) %>%
-    as.numeric
-  load(paste0(dir_output, result_files[i_file]))
-  load(paste0(dir_output, "fit_EM_", i, ".RData"))
-  result$i <- i
-  result$converge <- fit_EM$converge
-  result$diff <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$diff
-  result$params_x$truth$Corr_off_diag <- result$params_x$truth$Corr[lower.tri(result$params_x$truth$Corr)]
-  result$params_x$fit$Corr_off_diag <- result$params_x$fit$Corr[lower.tri(result$params_x$fit$Corr)]
-  result$l <- fit_EM$ll_params[[length(fit_EM$ll_params)]]$l
-
-  l_results <- c(l_results, list(result))
-}
-save(l_results, file = paste0(dir_output, "l_results.RData"))
-load(paste0(dir_output, "l_results.RData"))
-
-tb_results_ll <- 
-    tibble::tibble(
-      i_setup = l_results %>% 
-        purrr::map_dbl("i"),
-      Converge = l_results %>% 
-            purrr::map_lgl(~.x$converge$converge),
-      ll = l_results %>% 
-            purrr::map_dbl("l")
-    )  %>% 
-  dplyr::filter(!is.na(Converge)) %>% 
-  dplyr::filter(i_setup <= max(i_setup, na.rm = TRUE)) %>%
-  dplyr::left_join(tb_simulation, by = "i_setup") 
-
-tb_results_ll %>% 
-    ggplot(aes(x = log10(lambda), y = ll, color = as.factor(R),
-               alpha = Converge)) +
-    geom_point() +
-    geom_line() +
-    # scale_alpha_manual(values = c("TRUE"=1, "FALSE"=0.7), 
-    #                    na.value = "grey") +
-    facet_grid(N_p ~ pi0_Sigma_off_diag) +
-    ggtitle(paste0(i_param, "_a"))
 ```

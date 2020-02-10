@@ -96,8 +96,14 @@ get_sigmas <- function(x, eloga, eloga2, mu) {
 get_intLimits <- function(f, 
                           center = 0, limit_max, limit_min, step_size,
                           lower_bound = -1000, upper_bound = 1000,
+                          max_try = 10,
                           ...) {
-  # while(TRUE) {
+  i_try <- 0
+  while(TRUE) { ## FIXME
+    i_try <- i_try + 1
+    if(i_try > max_try)
+      stop("Could not find positive values for f!")
+    
     vchange <- exp(seq(from = log(limit_max),
                        to = log(limit_min),
                        by = -log(step_size)))
@@ -111,13 +117,12 @@ get_intLimits <- function(f,
     if(any(vval < 0))
       stop("There are negative values of f!")
     vflag <- vval > 0
-    vindex <- which(vflag)
-  #   if(any(vflag)) 
-  #     break
-  # }
-  if(!any(vflag))
-    stop("f is not positive at any values!")
+    if(any(vflag))
+      break
     
+    step_size <- sqrt(step_size)
+  }
+  vindex <- which(vflag)
   if(vflag[1]) {
     warning("f is already positive at maximum lower limit!")
     lower <- lower_bound

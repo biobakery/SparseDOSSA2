@@ -1,4 +1,4 @@
-glasso_wrapper <- function(S, lambda, source = "glasso",
+glasso_wrapper <- function(S, lambda, source = "hugec",
                            simplify = FALSE,
                            symm = TRUE,
                            corr = TRUE,
@@ -34,11 +34,13 @@ glasso_wrapper <- function(S, lambda, source = "glasso",
     }
   }
   
-  if(!is.null(threshold)) {
-    diag_Omega <- diag(Omega)
-    Omega[abs(Omega) < threshold] <- 0
-    diag(Omega) <- diag_Omega
-  }
+  # if(!is.null(threshold)) {
+  #   diag_Omega <- diag(Omega)
+  #   Omega[abs(Omega) < threshold] <- 0
+  #   diag(Omega) <- diag_Omega
+  # }
+  if(any(is.na(Omega)))
+    stop("Missing values in Omega estimation! (lambda to small?)")
   
   if(symm)
     Omega <- enforce_symm(Omega, method = "svd")

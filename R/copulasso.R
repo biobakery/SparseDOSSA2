@@ -25,8 +25,7 @@ copulasso <- function(data, lambda_list,
     lambda_list,
     function(lambda) {
       fit_glasso <- glasso_wrapper(S = s_data,
-                                   lambda = lambda,
-                                   threshold = 1e-6)
+                                   lambda = lambda)
       df <- (sum(fit_glasso != 0) - ncol(data)) / 2
       negLogLik <- negLogLik_mvn(S = s_data, Omega = fit_glasso)
       AIC <- negLogLik * nrow(s_data) + 2 * df
@@ -58,8 +57,7 @@ copulasso <- function(data, lambda_list,
         l_fit_glasso <- lapply(lambda_list,
                                function(lambda)
                                  glasso_wrapper(S = s_train,
-                                                lambda = lambda,
-                                                threshold = 1e-6)
+                                                lambda = lambda)
         )
         
         data_test <- data[folds == k, ]

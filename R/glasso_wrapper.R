@@ -39,8 +39,10 @@ glasso_wrapper <- function(S, lambda, source = "huge",
   #   Omega[abs(Omega) < threshold] <- 0
   #   diag(Omega) <- diag_Omega
   # }
-  if(any(is.na(Omega)))
+  if(any(is.na(Omega))) {
+    print("Missing values in Omega estimation! (lambda to small?)") # FIXME
     stop("Missing values in Omega estimation! (lambda to small?)")
+  }
   
   if(symm)
     Omega <- enforce_symm(Omega, method = "svd")

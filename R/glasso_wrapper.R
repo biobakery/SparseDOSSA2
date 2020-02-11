@@ -1,4 +1,4 @@
-glasso_wrapper <- function(S, lambda, source = "hugec",
+glasso_wrapper <- function(S, lambda, source = "huge",
                            simplify = FALSE,
                            symm = TRUE,
                            corr = TRUE,

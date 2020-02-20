@@ -2,7 +2,7 @@ glasso_wrapper <- function(S, lambda, source = "huge",
                            simplify = FALSE,
                            symm = TRUE,
                            corr = TRUE,
-                           threshold = 1e-6) {
+                           tol = 1e-15) {
   Omega <- diag(1/(diag(S) + lambda))
   
   if(simplify) 
@@ -51,5 +51,6 @@ glasso_wrapper <- function(S, lambda, source = "huge",
     Omega <- enforce_corr(Omega)
   }
   
+  Omega[abs(Omega) < tol] <- 0
   return(Omega)
 }

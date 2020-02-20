@@ -35,9 +35,11 @@ enforce_symm <- function(x, method = "svd") {
       x_out[lower.tri(x_out)] <- lower_tri(t(x_out), warning = FALSE)
     if(method == "svd") {
       svd_fit <- svd(x)
-      # just in case it's not pos-def 
+      # in case it's not pos-def 
       svd_fit$d <- abs(svd_fit$d) ## FIXME
       x_out <- svd_fit$u %*% diag(svd_fit$d) %*% t(svd_fit$u)
+      # I don't know how this could happen, but even after this x_out can still be not symmetric!
+      x_out[upper.tri(x_out)] <- upper_tri(t(x_out), warning = FALSE)
     }
   }
   

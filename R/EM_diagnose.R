@@ -335,7 +335,6 @@ control_EM <- function(maxit = 1000,
   list(maxit = maxit,
        rel_tol = rel_tol,
        abs_tol = abs_tol,
-       control_mcmc = control_mcmc,
        control_numint = control_numint,
        verbose = verbose,
        debug_dir = debug_dir)

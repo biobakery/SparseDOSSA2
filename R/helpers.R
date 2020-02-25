@@ -250,3 +250,7 @@ det2 <- function(m) {
     stop("Negative eigen values found for the matrix!")
   return(prod(eigens))
 }
+
+make_CVfolds <- function(n, K) {
+  cut(sample.int(n), breaks = K, labels = FALSE)
+}

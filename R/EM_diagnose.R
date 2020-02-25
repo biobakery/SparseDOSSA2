@@ -169,156 +169,71 @@ EM_diagnose <- function(data,
 #'
 #' @examples
 EM_diagnose_CV <- function(data, 
-                        params_init = NULL,
-                        control = list()) {
+                           lambdas,
+                           K,
+                           control = list()) {
+  
   control <- do.call(control_EM, control)
+  if(!is.null(control$debug_dir))
+    dir.create(control$debug_dir)
   
-  fit_marginals <- get_marginals(data)
-  if(is.null(params_init)) {
-    # Initialize using relative abundances
-    fit_copulasso <- copulasso(data = data, 
-                               lambda_list = control$lambda,
-                               K_CV = NULL) ## FIXME
-  }
-  params <- list(pi0 = fit_marginals[, 1],
-                 mu = fit_marginals[,2],
-                 sigma = fit_marginals[, 3],
-                 Sigma = solve(fit_copulasso$fits[[1]]),
-                 Omega = fit_copulasso$fits[[1]])
+  CV_folds <- make_CVfolds(n = nrow(data), K = K)
   
-  i_iter <- 0
-  converge <- FALSE
-  ll_easums <- list()
-  ll_params <- list()
-  while(TRUE) {
-    time <- Sys.time()
-    i_iter <- i_iter + 1
-    if(i_iter > control$maxit) break
-    if(control$verbose)
-      print(i_iter)
-    
-    ## E step
-    if(control$method == "mcmc") {
-      e_asums <- foreach::`%dopar%`(
-        foreach::foreach(i_sample = seq_len(nrow(data)),
-                         .combine='rbind'),
-        {
-          asum_samples <- mcmc_asum(x = data[i_sample, , drop = TRUE],
-                                    params = params,
-                                    R = control$control_mcmc$R)
-          asum_samples <- vapply(
-            asum_samples[-seq_len(round(control$control_mcmc$R * control$control_mcmc$burnin))],
-            function(i_asum) i_asum[["asum"]],
-            0.0)
-          return(c("mean" = mean(asum_samples), 
-                   "error" = sd(log(asum_samples)) / 
-                     sqrt(control$control_mcmc$R*(1 - control$control_mcmc$burnin))))
+  l_results_CV <- list()
+  for(k in seq_len(K)) {
+    if(control$verbose) message("Performing CV K=", k)
+    l_results_CV[[k]] <- future::future({
+      data_training <- data[CV_folds != k, ]
+      data_testing <- data[CV_folds == k, ]
+      control_tmp <- control
+      control_tmp$debug_dir <- paste0(control$debug_dir, "K", k, "/")
+      
+      l_fits <- EM_diagnose(data = data_training,
+                            lambdas = lambdas,
+                            control = control_tmp)
+      
+      l_ll <- future.apply::future_lapply(
+        seq_along(lambdas),
+        function(i_lambda) {
+          params <- l_fits[[i_lambda]]$fit
+          future.apply::future_sapply(
+            seq_len(nrow(data_testing)),
+            function(i_sample) {
+              ll <- log_dx(x = data_testing[i_sample, , drop = TRUE],
+                           pi0 = params$pi0, mu = params$mu,
+                           sigma = params$sigma, Omega = params$Omega,
+                           offset_a = 1,
+                           control = control$control_numint)
+            })
         })
-    }
-    if(control$method == "numint") {
-      e_asums <- future.apply::future_vapply(
-        seq_len(nrow(data)),
-        function(i_sample) {
-          i_time <- Sys.time()
-          if(i_iter == 1) offset_a <- 1
-          else offset_a <- ll_easums[[i_iter - 1]][i_sample, 1]
-          num <- ea(x = data[i_sample, , drop = TRUE],
-                    pi0 = params$pi0, mu = params$mu, 
-                    sigma = params$sigma, Omega = params$Omega,
-                    offset_a = offset_a,
-                    control = c(control$control_numint, 
-                                list(only_value = FALSE,
-                                     proper = FALSE)))
-          eloga_num <- eloga(x = data[i_sample, , drop = TRUE],
-                             pi0 = params$pi0, mu = params$mu, 
-                             sigma = params$sigma, Omega = params$Omega,
-                             offset_a = offset_a,
-                             control = c(control$control_numint, 
-                                         list(only_value = FALSE,
-                                              proper = FALSE)))
-          eloga2_num <- eloga2(x = data[i_sample, , drop = TRUE],
-                               pi0 = params$pi0, mu = params$mu, 
-                               sigma = params$sigma, Omega = params$Omega,
-                               offset_a = offset_a,
-                               control = c(control$control_numint, 
-                                           list(only_value = FALSE,
-                                                proper = FALSE)))
-          denom <- dx(x = data[i_sample, , drop = TRUE],
-                      pi0 = params$pi0, mu = params$mu, 
-                      sigma = params$sigma, Omega = params$Omega,
-                      offset_a = offset_a,
-                      control = c(control$control_numint, 
-                                  list(only_value = FALSE,
-                                       proper = FALSE)))
-          l <- log_dx(x = data[i_sample, , drop = TRUE],
-                      pi0 = params$pi0, mu = params$mu,
-                      sigma = params$sigma, Omega = params$Omega,
-                      offset_a = offset_a,
-                      control = control$control_numint)
-          return(c("mean" = num$integral / denom$integral,
-                   "error" = abs(num$error / denom$integral) + 
-                     abs(num$integral / (denom$integral)^2 * 
-                           denom$error),
-                   "l" = l,
-                   "eloga" = eloga_num$integral / denom$integral,
-                   "eloga2" = eloga2_num$integral / denom$integral,
-                   "time" = Sys.time() - i_time))
-        },
-        rep(0.0, 6)
-      ) %>% t()
-    }
-    ll_easums[[i_iter]] <- e_asums
-    
-    if(control$verbose)
-      print(Sys.time() - time)
-    
-    ## M step
-    a_data <- (data * e_asums[, 1])[!is.na(e_asums[, 1]), ] ## FIXME
-    fit_sigmas <- get_sigmas(x = data, 
-                             eloga = e_asums[, "eloga"], 
-                             eloga2 = e_asums[, "eloga2"], 
-                             mu = fit_marginals[, 2])
-    fit_copulasso <- copulasso(data = a_data, 
-                               lambda_list = control$lambda,
-                               K_CV = NULL) ## FIXME
-    params_new <- list(pi0 = fit_marginals[, 1],
-                       mu = fit_marginals[, 2],
-                       sigma = fit_sigmas,
-                       Sigma = solve(fit_copulasso$fits[[1]]),
-                       Omega = fit_copulasso$fits[[1]])
-    
-    diff_abs <- vapply(c("sigma", "Sigma"), 
-                       function(i_param)
-                         get_diff(params_new[[i_param]], params[[i_param]], 
-                                  denom_c = control$abs_tol, method = "abs"),
-                       0.0)
-    diff_rel <- vapply(c("sigma", "Sigma"), 
-                       function(i_param)
-                         get_diff(params_new[[i_param]], params[[i_param]], 
-                                  denom_c = control$abs_tol, method = "rel"),
-                       0.0)
-    
-    ll_params[[i_iter]] <- c(params_new,
-                             list(diff = c(diff_abs, diff_rel),
-                                  l = mean(ll_easums[[i_iter]][, 3]),
-                                  time = Sys.time() - time))
-    params <- params_new
-    
-    if(!is.null(control$debug)) {
-      res_tmp <- list(ll_easums = ll_easums, ll_params = ll_params)
-      save(res_tmp,
-           file = control$debug)
-    }
-    
-    if(max(diff_abs) < control$abs_tol & max(diff_rel) < control$rel_tol) {
-      converge <- TRUE
-      break
-    }
+      
+      for(i_lambda in seq_along(l_fits)) {
+        l_fits[[i_lambda]]$ll_CV <- l_ll[[i_lambda]]
+      }
+      l_fits
+    })
   }
   
-  return(list(ll_easums = ll_easums, ll_params = ll_params,
-              converge = list(converge = converge,
-                              n_iter = i_iter)))
+  ll_CV <- sapply(seq_len(lambdas),
+                  function(i_lambda) {
+                    ll <- rep(NA_real_, nrow(data))
+                    for(k in seq_len(K))
+                      ll[CV_folds == k] <- l_results_CV[[k]][[i_lambda]]$ll_CV
+                    return(ll)
+                  })
+  
+  if(control$verbose) message("Performing CV overall fit")
+  control_tmp <- control
+  control_tmp$debug_dir <- paste0(control_tmp$debug_dir, "K0/")
+  l_results <- future::future({
+    EM_diagnose(data = data_training,
+                lambdas = lambdas,
+                control = control_tmp)
+  })
+  
+  return(list(full = l_results,
+              ll_CV = ll_CV,
+              CV = l_results_CV))
 }
 
 control_EM <- function(maxit = 1000,

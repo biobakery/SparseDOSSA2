@@ -52,11 +52,11 @@ log_dx <- function(x,
                    control = list()) {
   control <- do.call(control_integrate, control)
   
-  log_offset <- 
-    SparseDOSSA2:::dloga(a = a(x, offset_a),
-                         pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
-  if(log_offset == -Inf) 
-    return(-Inf)
+  # log_offset <-
+  #   SparseDOSSA2:::dloga(a = a(x, offset_a),
+  #                        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  # if(log_offset == -Inf)
+  #   return(-Inf)
   log_offset <- 0
   
   int_limits <- get_intLimits(vintegrand_dx,

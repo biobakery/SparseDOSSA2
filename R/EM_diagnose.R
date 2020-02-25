@@ -136,7 +136,7 @@ EM_diagnose <- function(data,
         if(!is.null(control$debug_dir)) {
           l_debug <- list(ll_easums = ll_easums, ll_params = ll_params)
           save(l_debug,
-               file = paste0(control$debug_dir,"debug_", i, ".RData"))
+               file = paste0(control$debug_dir,"debug_lambda_", i_lambda, ".RData"))
         }
         
         if(max(diff_abs) < control$abs_tol & max(diff_rel) < control$rel_tol) {

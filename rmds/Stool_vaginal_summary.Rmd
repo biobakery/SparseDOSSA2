@@ -1,0 +1,256 @@
+---
+title: "Summarize results of real-world dataset fitting"
+author: "Siyuan Ma"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/hutlab11_nobackup/users/syma/sparsedossa_update/")
+library(magrittr)
+library(ggplot2)
+dir_output <- "/n/hutlab11_nobackup/users/syma/sparsedossa_update/results/Stool_vaginal/"
+dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r load datasets, include=FALSE}
+load("data/physeqs/HMP1II_vaginal.RData")
+load("data/physeqs/HMP1II_stool.RData")
+x_samples_vaginal <- physeq_vaginal %>% 
+  smar::otu_table2() %>% 
+  t()
+x_samples_vaginal <- x_samples_vaginal[, apply(x_samples_vaginal > 0, 2, sum) >= 5]
+x_samples_vaginal <- apply(x_samples_vaginal, 1, function(x) x / sum(x)) %>% 
+  t()
+
+x_samples_stool <- physeq_stool %>% 
+  smar::otu_table2() %>% 
+  t()
+x_samples_stool <- x_samples_stool[, apply(x_samples_stool > 0, 2, sum) >= 5]
+x_samples_stool <- apply(x_samples_stool, 1, function(x) x / sum(x)) %>% 
+  t()
+
+corr_stool <- cor(x_samples_stool, method = "spear")
+corr_vaginal <- cor(x_samples_vaginal, method = "spear")
+corr_stool_mod <- corr_stool %>% SparseDOSSA2:::iRho()
+diag(corr_stool_mod) <- 0
+corr_vaginal_mod <- corr_vaginal %>% SparseDOSSA2:::iRho()
+diag(corr_vaginal_mod) <- 0
+```
+
+Two datasets were fitted, from stool (more continuous) and vaginal (discretized by the dominant species) samples. For stool, $n=$ `r nrow(x_samples_stool)` and $p=$ `r ncol(x_samples_stool)`. For vaginal, $n=$ `r nrow(x_samples_vaginal)` and $p=$ `r ncol(x_samples_vaginal)`.
+
+```{r load results, include=FALSE}
+load(paste0(dir_output, "tb_simulation.RData"))
+tb_simulation <- tb_simulation %>% 
+  dplyr::mutate(i = seq_len(dplyr::n())) %>% 
+  dplyr::group_by(i) %>% 
+  dplyr::mutate(params = 
+                  {
+                    load(paste0(dir_output, "fit_", i, ".RData"))
+                    fit_EM$ll_params[[length(fit_EM$ll_params)]] %>% 
+                      list()
+                  }) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(log10_lambda = log10(lambda) %>% 
+                  format(digits = 2) %>% 
+                  forcats::as_factor())
+```
+
+# Examine fitted results
+
+```{r examine log likelihood and sparsity}
+tb_simulation <- tb_simulation %>% 
+  dplyr::mutate(l = params %>% 
+                  purrr::map_dbl("l"),
+                sparsity_Omega = params %>% 
+                  purrr::map_dbl(
+                    ~ mean(.x$Omega[lower.tri(.x$Omega)] == 0)
+                  ),
+                sparsity_Sigma = params %>% 
+                  purrr::map_dbl(
+                    ~ mean(.x$Omega[lower.tri(.x$Sigma)] == 0)
+                  ))
+tb_simulation %>%
+  ggplot(aes(x = log10(lambda), y = l)) +
+  geom_point() + geom_line() +
+  facet_grid(dataset ~ ., scales = "free_y")
+tb_simulation %>%
+  ggplot(aes(x = log10(lambda), y = sparsity_Omega)) +
+  geom_point() + geom_line() +
+  facet_grid(dataset ~ ., scales = "free_y")
+tb_simulation %>%
+  ggplot(aes(x = log10(lambda), y = sparsity_Sigma)) +
+  geom_point() + geom_line() +
+  facet_grid(dataset ~ ., scales = "free_y")
+tb_simulation %>% 
+  dplyr::filter(sparsity_Omega != 0 & sparsity_Omega != 1) %>% 
+  ggplot(aes(x = dataset, y = sparsity_Omega - sparsity_Sigma)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(position = position_jitter())
+```
+
+* $l$ dcreases with $\lambda$ which makes sense. Sparsity increases which also makes sense.
+* Sparsity $\in (0, 1)$ only for a small interval of $\lambda$, but this is the interesting part? i.e., varying magnitude of $\Omega$ but not changing its sparsity should not matter much in our simulation?
+* For non-trivial cases, sparsity in $\hat{\Omega}$ and $\hat{\Sigma} (=\hat{\Omega}^{-1})$ are very close. 
+  * glasso algorithm first thresholds input by $\lambda$, so it makes sense that $\hat{\Omega}$ and $\hat{\Sigma}$ are block diagonal
+
+```{r examine correlations, fig.width=30}
+tb_simulation_corr <- tb_simulation %>% 
+  dplyr::filter(lambda > 0.1, lambda < sqrt(10)) %>% 
+  dplyr::group_by(i) %>% 
+  dplyr::mutate(p_corr =
+                  {
+                    Omega <- abs(params[[1]]$Omega) > 0
+                    rownames(Omega) <- colnames(Omega) <- paste0("Feature", seq_len(nrow(Omega)))
+                    if(dataset == "stool")
+                      feature_order <- order(-apply(abs(corr_stool_mod), 2, max))
+                    if(dataset == "vaginal")
+                      feature_order <- order(-apply(abs(corr_vaginal_mod), 2, max))
+                    
+                    p <- Omega[feature_order, feature_order] %>% 
+                      as.data.frame() %>% 
+                      tibble::rownames_to_column(var="rowname") %>% 
+                      dplyr::mutate(rowname = forcats::as_factor(rowname)) %>% 
+                      tidyr::gather(key="colname", value="non_zero", -rowname) %>% 
+                      dplyr::mutate(colname = forcats::as_factor(colname)) %>% 
+                      ggplot(aes(x = rowname, y = colname, fill = non_zero)) +
+                      geom_tile(color = NA, size = 0) +
+                      scale_fill_manual(values = c("TRUE"="black", "FALSE"="white")) +
+                      theme(axis.title = element_blank(),
+                            axis.text = element_blank(),
+                            axis.ticks = element_blank(),
+                            legend.position = "none",
+                            panel.grid.major = element_blank(), 
+                            panel.grid.minor = element_blank()) +
+                      coord_fixed()
+                    list(p)
+                  })
+
+# stool
+p_stool <- tb_simulation_corr %>% 
+  dplyr::filter(dataset == "stool") %>% 
+  extract2("p_corr") %>% 
+  cowplot::plot_grid(plotlist = ., nrow = 1)
+ggsave(filename = paste0(dir_output, "fig_corr_stool.jpg"),
+       p_stool,
+       width = 60, height = 4,
+       limitsize = FALSE)
+print(p_stool)
+# vaginal
+p_vaginal <- tb_simulation_corr %>% 
+  dplyr::filter(dataset == "vaginal") %>% 
+  extract2("p_corr") %>% 
+  cowplot::plot_grid(plotlist = ., nrow = 1)
+ggsave(filename = paste0(dir_output, "fig_corr_vaginal.jpg"),
+       p_vaginal,
+       width = 60, height = 4,
+       limitsize = FALSE)
+print(p_vaginal)
+```
+
+# Per-feature results
+
+```{r per-feature results, fig.width=50}
+# tb_perFeature <- tibble::tibble(
+#   dataset = c("stool", "vaginal")
+# ) %>%
+#   dplyr::group_by(dataset) %>%
+#   dplyr::mutate(params_x =
+#   {
+#     if(dataset == "stool")
+#       c(SparseDOSSA2:::get_marginals(x_samples_stool) %>%
+#           as.data.frame(),
+#         list(Corr = corr_stool)) %>%
+#       list()
+#     else
+#       c(SparseDOSSA2:::get_marginals(x_samples_vaginal) %>%
+#           as.data.frame(),
+#         list(Corr = corr_vaginal)) %>%
+#       list()
+#   }) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::right_join(tb_simulation, by = "dataset") %>%
+#   dplyr::group_by(i) %>%
+#   dplyr::mutate(params_x_fit = {
+#     params_fit <- params[[1]]
+#     a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = 10000,
+#                                                         pi0 = params_fit$pi0,
+#                                                         mu = params_fit$mu,
+#                                                         sigma = params_fit$sigma,
+#                                                         Omega = params_fit$Omega)
+#     a_samples_SparseDOSSA2 <- a_samples_SparseDOSSA2[!apply(a_samples_SparseDOSSA2 == 0, 1, all), ]
+#     x_samples_SparseDOSSA2 <- t(apply(a_samples_SparseDOSSA2, 1, function(x) x / sum(x)))
+# 
+#     c(SparseDOSSA2:::get_marginals(x_samples_SparseDOSSA2) %>%
+#           as.data.frame(),
+#         list(Corr = cor(x_samples_SparseDOSSA2, method = "spear"))) %>%
+#       list()
+#   })
+# save(tb_perFeature, file = paste0(dir_output, "tb_perFeature.RData"))
+load(paste0(dir_output, "tb_perFeature.RData"))
+# Plot per feature means
+tb_perFeature <- seq_len(nrow(tb_perFeature)) %>% 
+  purrr::map_dfr(
+    function(i)
+      c("mu", "sigma") %>% 
+      purrr::map_dfr(
+        function(variable)
+          tibble::tibble(
+            data = tb_perFeature$params_x[[i]][[variable]],
+            fit = tb_perFeature$params_x_fit[[i]][[variable]],
+            variable = variable)
+      ) %>% 
+      rbind(
+        tibble::tibble(
+          data = tb_perFeature$params_x[[i]][["Corr"]][lower.tri(tb_perFeature$params_x[[i]][["Corr"]])],
+          fit = tb_perFeature$params_x_fit[[i]][["Corr"]][lower.tri(tb_perFeature$params_x[[i]][["Corr"]])],
+          variable = "Corr")
+      ) %>% 
+      dplyr::mutate(i = tb_perFeature$i[i])
+  ) %>% 
+  dplyr::left_join(tb_simulation, by = "i")
+
+p_mu <- tb_perFeature %>% 
+  dplyr::filter(variable == "mu") %>% 
+  ggplot(aes(x = data, y = fit)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  facet_grid(dataset ~ log10_lambda) +
+  coord_fixed() +
+  ggtitle("mu")
+ggsave(filename = paste0(dir_output, "fig_mu.jpg"),
+       p_mu,
+       width = 80, height = 10,
+       limitsize = FALSE)
+
+p_sigma <- tb_perFeature %>% 
+  dplyr::filter(variable == "sigma") %>% 
+  ggplot(aes(x = data, y = fit)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  facet_grid(dataset ~ log10_lambda) +
+  coord_fixed() +
+  ggtitle("sigma")
+ggsave(filename = paste0(dir_output, "fig_sigma.jpg"),
+       p_sigma,
+       width = 80, height = 10,
+       limitsize = FALSE)
+
+p_Corr <- tb_perFeature %>% 
+  dplyr::filter(variable == "Corr") %>% 
+  ggplot(aes(x = data, y = fit)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  facet_grid(dataset ~ log10_lambda) +
+  coord_fixed() +
+  ggtitle("Corr")
+ggsave(filename = paste0(dir_output, "fig_Corr.jpg"),
+       p_Corr,
+       width = 80, height = 10,
+       limitsize = FALSE)
+
+print(p_mu)
+print(p_sigma)
+print(p_Corr)
+```

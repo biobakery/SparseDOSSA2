@@ -214,6 +214,7 @@ EM_diagnose_CV <- function(data,
     })
   }
   
+  if(control$verbose) message("Aggregating likelihood")
   ll_CV <- sapply(seq_len(lambdas),
                   function(i_lambda) {
                     ll <- rep(NA_real_, nrow(data))
@@ -222,7 +223,7 @@ EM_diagnose_CV <- function(data,
                     return(ll)
                   })
   
-  if(control$verbose) message("Performing CV overall fit")
+  if(control$verbose) message("Performing overall fit")
   control_tmp <- control
   control_tmp$debug_dir <- paste0(control_tmp$debug_dir, "K0/")
   l_results <- future::future({

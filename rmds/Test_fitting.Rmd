@@ -17,7 +17,7 @@ dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 
 ```{r setup cluster parameter}
 ncpus <- 45
-walltime <- 3600 * 4
+walltime <- 3600
 ```
 
 ```{r set up simulation grid}
@@ -70,6 +70,13 @@ njobs <- nrow(tb_simulation)
 
 ```{r simulation task}
 one_job <- function(i_job) {
+  
+  # redirect output
+  close(file(paste0(dir_output, "log_", i_job, ".txt"), open = "w"))
+  con <- file(paste0(dir_output, "log_", i_job, ".txt"), open = "w")
+  sink(con, append=TRUE)
+  sink(con, append=TRUE, type="message")
+
   future::plan(future::multicore)
   # set.seed(i_job)
   i_tb_simulation <- tb_simulation[i_job, ]
@@ -80,7 +87,7 @@ one_job <- function(i_job) {
   a_samples_fit <- i_tb_simulation$a_set[[1]]
   a_samples_fit <- a_samples_fit[!apply(a_samples_fit == 0, 1, all), ]
   x_samples_fit <- t(apply(a_samples_fit, 1, function(x) x / sum(x)))
-
+  
   # fit SparseDOSSA
   time_start <- Sys.time()
   fit_EM <- SparseDOSSA2:::EM_diagnose(
@@ -129,7 +136,11 @@ one_job <- function(i_job) {
                  time = time)
   save(result, file = paste0(dir_output, "result_", i_job, ".RData"))
   
-  return(result)
+  # Restore output to console
+  sink()
+  sink(type="message")
+  
+  return(NULL)
 }
 ```
 
@@ -144,70 +155,7 @@ i_results <- result_files %>%
   gsub("result_", "", ., fixed = TRUE) %>% 
   gsub(".RData", "", ., fixed = TRUE) %>% 
   as.numeric()
-l_results <- list()
 for(i_job in setdiff(seq_len(njobs), i_results)) {
-  l_results[[i_job]] <- future::future(one_job(i_job))
+  future_log <- future::future(one_job(i_job))
 }
-save(l_results, file = paste0(dir_output, "l_results.RData"))
-```
-
-```{r debug}
-debug_files <- list.files(dir_output, pattern = "^debug_")
-i_debug <- debug_files %>% 
-  gsub("debug_", "", ., fixed = TRUE) %>% 
-  gsub(".RData", "", ., fixed = TRUE) %>% 
-  as.numeric()
-setdiff(i_debug, i_results)
-
-one_debug <- function(i_job) {
-  
-  load(paste0("/n/hutlab11_nobackup/users/syma/sparsedossa_update/results/Test_fitting/debug_", 
-              i_job, ".RData"))
-  ll_easums <- res_tmp$ll_easums
-  ll_params <- res_tmp$ll_params
-  tb_max_diff_easums <- 
-    seq_along(ll_easums)[-1] %>% 
-    purrr::map_dbl(
-      ~ SparseDOSSA2:::get_diff(ll_easums[[.x]][, 1],
-                                ll_easums[[.x - 1]][, 1],
-                                "rel") %>% 
-        max
-    ) %>% 
-    tibble::tibble(diff = .,
-                   i = seq_along(ll_easums)[-1])
-  
-  tb_max_diff_params <- ll_params %>% 
-    purrr::map_dfr(
-      ~ tibble::tibble(sigma = .x$diff[3],
-                       Sigma = .x$diff[4])
-    ) %>% 
-    dplyr::mutate(i = seq_along(ll_easums))
-  
-  p1 <- tb_max_diff_easums %>% 
-    ggplot(aes(x = i,
-               y = diff)) +
-    geom_point() + geom_line() +
-    ggtitle(i_job)
-  
-  p2 <- tb_max_diff_params %>% 
-    ggplot(aes(x = i,
-               y = sigma)) +
-    geom_point() + geom_line()
-  
-  p3 <- tb_max_diff_params %>% 
-    ggplot(aes(x = i,
-               y = Sigma)) +
-    geom_point() + geom_line()
-  
-  cowplot::plot_grid(p1, p2, p3,
-                     nrow = 1) %>% 
-    return()
-}
-
-pdf(paste0(dir_output, "debug.pdf"),
-    width = 12, height = 4)
-for(i_job in setdiff(i_debug, i_results)) {
-    print(one_debug(i_job))
-}
-dev.off()
 ```

@@ -1,0 +1,205 @@
+---
+title: "Failed cases"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+dir_project <- "/n/hutlab11_nobackup/users/syma/sparsedossa_update/"
+# dir_project <- "~/Dropbox (Harvard University)/sparsedossa_update/"
+knitr::opts_knit$set(root.dir = dir_project,
+                     echo = FALSE)
+library(magrittr)
+library(ggplot2)
+dir_output <- paste0(dir_project, "results/Test_fitting/")
+dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r get failed case ids}
+load(paste0(dir_output, "tb_simulation.RData"))
+result_files <- list.files(dir_output, pattern = "^result")
+result_tb <- file.info(paste0(dir_output, result_files))
+i_results <- result_tb %>% 
+  tibble::rownames_to_column("file") %>% 
+  dplyr::filter(mtime > strftime("2020-02-10 00:00:00")) %>% 
+  extract2("file") %>% 
+  gsub(dir_output, "", ., fixed = TRUE) %>% 
+  gsub("result_", "", ., fixed = TRUE) %>% 
+  gsub(".RData", "", ., fixed = TRUE) %>% 
+  as.numeric()
+
+fit_files <- list.files(dir_output, pattern = "^fit_EM_")
+fit_tb <- file.info(paste0(dir_output, fit_files))
+i_fit <- fit_tb %>% 
+  tibble::rownames_to_column("file") %>% 
+  dplyr::filter(mtime > strftime("2020-02-10 00:00:00")) %>% 
+  extract2("file") %>% 
+  gsub(dir_output, "", ., fixed = TRUE) %>% 
+  gsub("fit_EM_", "", ., fixed = TRUE) %>% 
+  gsub(".RData", "", ., fixed = TRUE) %>% 
+  as.numeric()
+
+debug_files <- list.files(dir_output, pattern = "^debug_")
+debug_tb <- file.info(paste0(dir_output, debug_files))
+i_debug <- debug_tb %>% 
+  tibble::rownames_to_column("file") %>% 
+  dplyr::filter(mtime > strftime("2020-02-10 00:00:00")) %>% 
+  extract2("file") %>% 
+  gsub(dir_output, "", ., fixed = TRUE) %>% 
+  gsub("debug_", "", ., fixed = TRUE) %>%
+  gsub(".RData", "", ., fixed = TRUE) %>%
+  as.numeric()
+
+i_error <- setdiff(i_debug, i_fit)
+i_error_flag <- 
+  i_error %>% 
+  purrr::map_lgl(~ {
+    output <- paste0("/n/hutlab11_nobackup/users/syma/sparsedossa_update/results/Test_fitting/log_",
+                 .x, ".txt") %>% 
+      scan(what = "character", sep = "\n", quiet = TRUE)
+    any(stringr::str_detect(output, "Missing values in Omega estimation"))
+  })
+# 
+# tb_debug <- i_error %>%
+#   purrr::map_dfr(
+#     ~ {
+#       load(paste0("/n/hutlab11_nobackup/users/syma/sparsedossa_update/results/Test_fitting/debug_",
+#               .x, ".RData"))
+#       tibble::tibble(
+#         i_job = .x,
+#         e_asums = max(abs(res_tmp$ll_easums[[length(res_tmp$ll_easums)]][, -(2:3)])),
+#         Omega_svd = list(svd(res_tmp$ll_params[[length(res_tmp$ll_params)]]$Omega)$d),
+#         sigma_max = max(res_tmp$ll_params[[length(res_tmp$ll_params)]]$sigma),
+#         sigma_min = min(res_tmp$ll_params[[length(res_tmp$ll_params)]]$sigma),
+#         lambda = tb_simulation[.x, ]$lambda
+#       )
+#     }
+#   )
+```
+# Four reasons why jobs fail
+```{r visualize all cases}
+one_debug <- function(i_job) {
+
+  load(paste0("/n/hutlab11_nobackup/users/syma/sparsedossa_update/results/Test_fitting/debug_",
+              i_job, ".RData"))
+  ll_easums <- res_tmp$ll_easums
+  ll_params <- res_tmp$ll_params
+  tb_max_diff_easums <-
+    seq_along(ll_easums)[-1] %>%
+    purrr::map_dbl(
+      ~ SparseDOSSA2:::get_diff(ll_easums[[.x]][, 1],
+                                ll_easums[[.x - 1]][, 1],
+                                "rel") %>%
+        max
+    ) %>%
+    tibble::tibble(diff = .,
+                   i = seq_along(ll_easums)[-1])
+
+  tb_max_diff_params <- ll_params %>%
+    purrr::map_dfr(
+      ~ tibble::tibble(sigma = .x$diff[3],
+                       Sigma = .x$diff[4])
+    ) %>%
+    dplyr::mutate(i = seq_along(ll_easums))
+
+  p1 <- tb_max_diff_easums %>%
+    ggplot(aes(x = i,
+               y = log10(diff))) +
+    geom_point() + geom_line() +
+    ggtitle(paste0(i_job,
+                   " log10(lam)=", log10(tb_simulation$lambda[i_job]),
+                   " rho=", tb_simulation$Sigma_off_diag[i_job]))
+
+  p2 <- tb_max_diff_params %>%
+    ggplot(aes(x = i,
+               y = log10(sigma))) +
+    geom_point() + geom_line()
+
+  p3 <- tb_max_diff_params %>%
+    ggplot(aes(x = i,
+               y = log10(Sigma))) +
+    geom_point() + geom_line()
+
+  cowplot::plot_grid(p1, p2, p3,
+                     nrow = 1) %>%
+    return()
+}
+
+pdf(paste0(dir_output, "debug.pdf"),
+    width = 12, height = 4)
+for(i_job in setdiff(i_debug, i_results)) {
+    print(one_debug(i_job))
+}
+dev.off()
+
+tb_summary <- tb_simulation %>% 
+  # dplyr::filter(i_setup %in% setdiff(i_debug, i_results)) %>% 
+  dplyr::mutate(
+    failed_case = dplyr::case_when(
+      i_setup %in% i_error[i_error_flag] ~ "glasso error",
+      i_setup %in% i_error[!i_error_flag] ~ "other EM error",
+      i_setup %in% setdiff(i_fit, i_results) ~ "simulation error",
+      TRUE ~ "no error"
+  ))
+
+tb_summary %>% 
+  ggplot(aes(x = failed_case)) +
+  geom_bar(stat = "count")
+```
+# First reason: glasso returns NA values (lambda too small)
+```{r examine glasso error}
+tb_summary %>% 
+  dplyr::filter(failed_case == "glasso error") %>% 
+  dplyr::group_by(lambda, p) %>% 
+  dplyr::summarise(n = dplyr::n()) %>% 
+  print()
+```
+# Second reason: E a_sum goes to extreme values when rho is high (0.9)
+```{r examine other error}
+tb_summary %>% 
+  dplyr::filter(failed_case == "other EM error", Sigma_off_diag == 0.9) %>% 
+  dplyr::group_by(lambda, p, pi0, Sigma_off_diag) %>% 
+  dplyr::summarise(n = dplyr::n()) %>% 
+  print()
+tb_summary %>% 
+  dplyr::filter(failed_case == "other EM error", Sigma_off_diag == 0.9) %>%
+  extract2("i_setup") %>% 
+  purrr::map_dfr(
+    ~ {
+      load(paste0("/n/hutlab11_nobackup/users/syma/sparsedossa_update/results/Test_fitting/debug_",
+              .x, ".RData"))
+      tibble::tibble(
+        i_job = .x,
+        sigma_max = max(res_tmp$ll_params[[length(res_tmp$ll_params)]]$sigma),
+        ea_max = max(res_tmp$ll_easums[[length(res_tmp$ll_easums)]][, 1])
+      )
+    }
+  ) %>% 
+  extract2("ea_max") %>% summary
+
+tb_summary %>% 
+  dplyr::filter(failed_case == "simulation error") %>% 
+  dplyr::group_by(lambda, p, pi0, Sigma_off_diag) %>% 
+  dplyr::summarise(n = dplyr::n()) %>% 
+  print()
+tb_summary %>% 
+  dplyr::filter(failed_case == "simulation error") %>%
+  extract2("i_setup") %>% 
+  purrr::map_dfr(
+    ~ {
+      load(paste0("/n/hutlab11_nobackup/users/syma/sparsedossa_update/results/Test_fitting/debug_",
+              .x, ".RData"))
+      tibble::tibble(
+        i_job = .x,
+        sigma_max = max(res_tmp$ll_params[[length(res_tmp$ll_params)]]$sigma),
+        Omega_d = min(svd(res_tmp$ll_params[[length(res_tmp$ll_params)]]$Sigma)$d)
+      )
+    }
+  ) %>% 
+ extract2("sigma_max") %>% summary
+```
+# Third reason: timed out (rare)
+```{r timed out cases}
+tb_summary %>% 
+  dplyr::filter(failed_case == "other EM error", Sigma_off_diag != 0.9) %>% 
+  print()
+```

@@ -98,7 +98,7 @@ get_sigmas <- function(x, eloga, eloga2, mu) {
 get_intLimits <- function(f, 
                           center = 0, limit_max, limit_min, step_size,
                           lower_bound = -1000, upper_bound = 1000,
-                          max_try = 100,
+                          max_try = 20,
                           ...) {
   i_try <- 0
   while(TRUE) { ## FIXME
@@ -139,6 +139,21 @@ get_intLimits <- function(f,
   }
   
   return(c(lower, upper))
+}
+
+get_intLimits2 <- function(x, mu, sigma) {
+  ind_nonzero <- x != 0
+  logx <- log(x[ind_nonzero])
+  mu <- mu[ind_nonzero]
+  sigma <- sigma[ind_nonzero]
+  mat_range <- cbind(mu - logx - sqrt(1500)*sigma,
+                 mu - logx + sqrt(1500)*sigma)
+  range <- c("lower" = max(mat_range[, 1]), 
+             "upper" = min(mat_range[, 2]))
+  if(range[1] >= range[2])
+    stop("There is no possible range!")
+  
+  return(range)
 }
 
 get_offset <- function(x, 
@@ -253,4 +268,42 @@ det2 <- function(m) {
 
 make_CVfolds <- function(n, K) {
   cut(sample.int(n), breaks = K, labels = FALSE)
+}
+
+filter_data <- function(data, 
+                        k_feature = 2, k_sample = 1,
+                        max_iter = 3) {
+  i_iter <- 0
+  ind_feature <- rep(TRUE, ncol(data))
+  ind_sample <- rep(TRUE, nrow(data))
+  
+  while(TRUE) {
+    if (i_iter + 1 > max_iter) 
+      stop("Max iteration reached!")
+    i_iter <- i_iter + 1
+    
+    ind_feature_tmp <- apply(data[ind_sample, ind_feature, drop = FALSE] > 0, 2, sum) >= k_feature
+    ind_feature[ind_feature] <- ind_feature_tmp
+    ind_sample_tmp <- apply(data[ind_sample, ind_feature, drop = FALSE] > 0, 1, sum) >= k_sample
+    ind_sample[ind_sample] <- ind_sample_tmp
+    
+    if (all(ind_feature_tmp) & all(ind_sample_tmp)) 
+      return(list(ind_feature = ind_feature,
+                  ind_sample = ind_sample))
+  }
+}
+
+fill_estimates_CV <- function(params_CV, params_full, ind_feature) {
+  params_return <- params_full
+  params_return$Sigma <- 
+    params_return$Omega <- 
+    diag(rep(1, length(ind_feature)))
+  
+  for(param in c("pi0", "mu", "sigma"))
+    params_return[[param]][ind_feature] <- params_CV[[param]]
+  
+  for(param in c("Sigma", "Omega"))
+    params_return[[param]][ind_feature, ind_feature] <- params_CV[[param]]
+  
+  return(params_return)
 }

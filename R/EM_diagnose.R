@@ -17,15 +17,19 @@ EM_diagnose <- function(data,
   if(!is.null(control$debug_dir))
     dir.create(control$debug_dir)
   
+  # Filtering out features/samples that are all zero
+  l_filtering <- filter_data(data)
+  data <- data[l_filtering$ind_sample, l_filtering$ind_feature, drop = FALSE]
+  
   # Initialize using relative abundances
   fit_marginals <- get_marginals(data)
   
-  l_results <- list()
+  l_fits <- list()
   for(i_lambda in seq_along(lambdas)) {
     if(control$verbose) message("Fitting for lambda ", i_lambda)
     lambda <- lambdas[i_lambda]
     
-    l_results[[i_lambda]] <- future::future({
+    l_fits[[i_lambda]] <- future::future({
       
       # Initialize using relative abundances
       fit_copulasso <- copulasso(data = data, 
@@ -83,7 +87,7 @@ EM_diagnose <- function(data,
                         control = c(control$control_numint, 
                                     list(only_value = FALSE,
                                          proper = FALSE)))
-            l <- log_dx(x = data[i_sample, , drop = TRUE],
+            logLik <- log_dx(x = data[i_sample, , drop = TRUE],
                         pi0 = params$pi0, mu = params$mu,
                         sigma = params$sigma, Omega = params$Omega,
                         offset_a = offset_a,
@@ -92,7 +96,7 @@ EM_diagnose <- function(data,
                      "error" = abs(num$error / denom$integral) + 
                        abs(num$integral / (denom$integral)^2 * 
                              denom$error),
-                     "l" = l,
+                     "logLik" = logLik,
                      "eloga" = eloga_num$integral / denom$integral,
                      "eloga2" = eloga2_num$integral / denom$integral,
                      "time" = Sys.time() - i_time))
@@ -129,12 +133,12 @@ EM_diagnose <- function(data,
         
         ll_params[[i_iter]] <- c(params_new,
                                  list(diff = c(diff_abs, diff_rel),
-                                      l = mean(ll_easums[[i_iter]][, 3]),
+                                      logLik = mean(ll_easums[[i_iter]][, 3]),
                                       time = Sys.time() - time))
         params <- params_new
         
         if(!is.null(control$debug_dir)) {
-          l_debug <- list(ll_easums = ll_easums, ll_params = ll_params)
+          l_debug <- list(ll_easums = ll_easums, ll_params = ll_params, l_filtering = l_filtering)
           save(l_debug,
                file = paste0(control$debug_dir,"debug_lambda_", i_lambda, ".RData"))
         }
@@ -152,8 +156,9 @@ EM_diagnose <- function(data,
     })
   }
   
-  l_results <- future::values(l_results)
-  return(l_results)
+  l_fits <- future::values(l_fits)
+  return(list(l_fits = l_fits,
+              l_filtering = l_filtering))
 }
 
 
@@ -172,13 +177,28 @@ EM_diagnose_CV <- function(data,
                            lambdas,
                            K,
                            control = list()) {
-  
   control <- do.call(control_EM, control)
   if(!is.null(control$debug_dir))
     dir.create(control$debug_dir)
   
-  CV_folds <- make_CVfolds(n = nrow(data), K = K)
+  # Filtering out features/samples that are all zero
+  l_filtering <- filter_data(data)
+  data <- data[l_filtering$ind_sample, l_filtering$ind_feature, drop = FALSE]
   
+  if(control$verbose) message("Performing full data fit")
+  control_tmp <- control
+  control_tmp$debug_dir <- paste0(control_tmp$debug_dir, "K0/")
+  l_fits_full <- future::future({
+    EM_diagnose(data = data,
+                lambdas = lambdas,
+                control = control_tmp)$l_fits
+  })
+  l_fits_full <- future::value(l_fits_full)
+  
+  # CV fits
+  CV_folds <- make_CVfolds(n = nrow(data), K = K)
+  if(!is.null(control$debug_dir))
+    save(CV_folds, file = paste0(control$debug_dir, "CV_folds.RData"))
   l_results_CV <- list()
   for(k in seq_len(K)) {
     if(control$verbose) message("Performing CV K=", k)
@@ -188,64 +208,59 @@ EM_diagnose_CV <- function(data,
       control_tmp <- control
       control_tmp$debug_dir <- paste0(control$debug_dir, "K", k, "/")
       
-      l_fits <- EM_diagnose(data = data_training,
-                            lambdas = lambdas,
-                            control = control_tmp)
+      result_k <- EM_diagnose(data = data_training,
+                              lambdas = lambdas,
+                              control = control_tmp)
       
-      l_ll <- future.apply::future_lapply(
+      # Fill in parameters estimates for features not present in training data
+      for(i_lambda in seq_along(lambdas))
+        result_k$l_fits[[i_lambda]]$fit <- fill_estimates_CV(result_k$l_fits[[i_lambda]]$fit,
+                                                             l_fits_full$l_fits[[i_lambda]]$fit,
+                                                             result_k$l_filtering$ind_feature)
+      
+      # Calculate ll in testing data
+      l_logLik <- future.apply::future_lapply(
         seq_along(lambdas),
         function(i_lambda) {
-          params <- l_fits[[i_lambda]]$fit
+          params <- result_k$l_fits[[i_lambda]]$fit
           future.apply::future_sapply(
             seq_len(nrow(data_testing)),
             function(i_sample) {
-              ll <- log_dx(x = data_testing[i_sample, , drop = TRUE],
-                           pi0 = params$pi0, mu = params$mu,
-                           sigma = params$sigma, Omega = params$Omega,
-                           offset_a = 1,
-                           control = control$control_numint)
+              logLik <- log_dx(x = data_testing[i_sample, , drop = TRUE],
+                               pi0 = params$pi0, mu = params$mu,
+                               sigma = params$sigma, Omega = params$Omega,
+                               offset_a = 1,
+                               control = control$control_numint)
             })
         })
       
-      for(i_lambda in seq_along(l_fits)) {
-        l_fits[[i_lambda]]$ll_CV <- l_ll[[i_lambda]]
-      }
-      l_fits
+      list(l_fits = result_k$l_fits,
+           l_logLik = l_logLik)
     })
   }
+  l_results_CV <- future::values(l_results_CV)
   
-  if(control$verbose) message("Aggregating likelihood")
-  ll_CV <- sapply(seq_len(lambdas),
-                  function(i_lambda) {
-                    ll <- rep(NA_real_, nrow(data))
-                    for(k in seq_len(K))
-                      ll[CV_folds == k] <- l_results_CV[[k]][[i_lambda]]$ll_CV
-                    return(ll)
-                  })
+  # Aggregate CV results
+  logLik_CV <- sapply(seq_along(lambdas),
+                      function(i_lambda) {
+                        logLik <- rep(NA_real_, nrow(data))
+                        for(k in seq_len(K))
+                          logLik[CV_folds == k] <- l_results_CV[[k]]$l_logLik[[i_lambda]]
+                        return(logLik)
+                      })
+  ll_fits_CV <- lapply(l_results_CV, function(result_k) result_k$l_fits)
   
-  if(control$verbose) message("Performing overall fit")
-  control_tmp <- control
-  control_tmp$debug_dir <- paste0(control_tmp$debug_dir, "K0/")
-  l_results <- future::future({
-    EM_diagnose(data = data_training,
-                lambdas = lambdas,
-                control = control_tmp)
-  })
-  
-  return(list(full = l_results,
-              ll_CV = ll_CV,
-              CV = l_results_CV))
+  return(list(l_fits_full = l_fits_full,
+              logLik_CV = logLik_CV,
+              ll_fits_CV = ll_fits_CV,
+              l_filtering = l_filtering,
+              CV_folds = CV_folds))
 }
 
 control_EM <- function(maxit = 1000,
                        rel_tol = 1e-3,
                        abs_tol = 1e-3,
-                       control_numint = list(subdivisions = 10000,
-                                             limit_max = 50,
-                                             limit_min = 1e-10,
-                                             step_size = 2,
-                                             rel_tol = 1e-6,
-                                             abs_tol = 0),
+                       control_numint = list(),
                        verbose = FALSE,
                        debug_dir = NULL) {
   list(maxit = maxit,

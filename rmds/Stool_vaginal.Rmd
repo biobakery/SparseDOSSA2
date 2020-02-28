@@ -4,15 +4,15 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_knit$set(root.dir = "/n/hutlab11_nobackup/users/syma/sparsedossa_update/")
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
 library(magrittr)
 library(ggplot2)
 ```
 
 ```{r setup2, include=FALSE}
 # Registry
-# batchtools::makeRegistry(file.dir = "reg/Stool_vaginal/", package = "magrittr")
-batchtools::loadRegistry(file.dir = "reg/Stool_vaginal", writeable = TRUE)
+# batchtools::makeRegistry(file.dir = "r_batchtools_reg/Stool_vaginal/", package = "magrittr")
+batchtools::loadRegistry(file.dir = "r_batchtools_reg/Stool_vaginal", writeable = TRUE)
 batchtools::clearRegistry()
 
 # Grid parameters
@@ -21,8 +21,9 @@ partition <- "janson"
 walltime <- 10 * 3600
 
 # Output dir
-dir_output <- "/n/hutlab11_nobackup/users/syma/sparsedossa_update/results/Stool_vaginal/"
+dir_output <- "/n/janson_lab/lab/sma/sparsedossa_update/results/Stool_vaginal/"
 dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+smar::sourceDir("SparseDOSSA2/R/")
 ```
 
 ```{r setup simulation params}
@@ -64,7 +65,7 @@ one_job <- function(i_job) {
 
   # fit SparseDOSSA
   time_start <- Sys.time()
-  fit_EM <- SparseDOSSA2:::EM_diagnose_CV(
+  fit_EM <- EM_diagnose_CV(
     data = x_samples,
     lambdas = i_tb_simulation$lambda,
     K = 2,
@@ -88,4 +89,30 @@ tb_ids <- batchtools::batchMap(one_job,
 batchtools::batchExport(mget(ls()))
 batchtools::submitJobs(resources =  list(ncpus = ncpus, partition = partition, walltime = walltime))
 print(Sys.time() - time_start)
+```
+
+```{r debug}
+load("results/Stool_vaginal/42/CV_folds.RData")
+load("results/Stool_vaginal/42/K0/debug_lambda_1.RData")
+params_full <- rev(l_debug$ll_params)[[1]]
+e_asums <- rev(l_debug$ll_easums)[[1]]
+load("results/Stool_vaginal/42/K2/debug_lambda_1.RData")
+params_CV <- rev(l_debug$ll_params)[[1]]
+l_filtering <- l_debug$l_filtering
+data <- x_samples_vaginal
+params <- fill_estimates_CV(params_CV, params_full, l_filtering$ind_feature)
+k <- 2
+data_testing <- data[CV_folds == k, ]
+logLiks <- c()
+control <- do.call(control_EM, list())
+for(i_sample in seq_len(nrow(data_testing))) {
+  if(i_sample %% 10 == 0) print(i_sample)
+  logLik <- log_dx(x = data_testing[i_sample, , drop = TRUE],
+                   pi0 = params$pi0, mu = params$mu,
+                   sigma = params$sigma, Omega = params$Omega,
+                   offset_a = 1,
+                   control = control$control_numint)
+  logLiks <- c(logLiks, logLik)
+}
+offset_a <- e_asums[CV_folds == k, ][29, ][1]
 ```

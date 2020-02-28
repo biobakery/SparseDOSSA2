@@ -1,7 +1,8 @@
 dx <- function(x, 
                pi0, mu, sigma, Omega,
                offset_a = 1,
-               control = list()) {
+               control = list(),
+               getLimits_new = FALSE) {
   control <- do.call(control_integrate, control)
   
   ## FIXME
@@ -11,24 +12,37 @@ dx <- function(x,
     stop("Something went wrong!")
   log_offset <- 0
   
-  int_limits <- get_intLimits(vintegrand_dx,
-                              center = log(offset_a),
-                              limit_max = control$limit_max,
-                              limit_min = control$limit_min,
-                              step_size = control$step_size,
-                              max_try = control$max_try,
-                              x = x, pi0 = pi0, mu = mu,
-                              sigma = sigma, Omega = Omega,
-                              log_offset = log_offset)
-  
-  fit_integrate <- 
-    cubature::cubintegrate(vintegrand_dx,
-                           lower = int_limits[1], upper = int_limits[2], 
-                           relTol = control$rel_tol, absTol = control$abs_tol,
-                           method = control$method, maxEval = control$max_eval,
-                           nVec = 100,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-                           log_offset = log_offset)
+  if(!getLimits_new) {
+    int_limits <- get_intLimits(vintegrand_dx,
+                                center = log(offset_a),
+                                limit_max = control$limit_max,
+                                limit_min = control$limit_min,
+                                step_size = control$step_size,
+                                max_try = control$max_try,
+                                x = x, pi0 = pi0, mu = mu,
+                                sigma = sigma, Omega = Omega,
+                                log_offset = log_offset)
+    
+    fit_integrate <- 
+      cubature::cubintegrate(vintegrand_dx,
+                             lower = int_limits[1], upper = int_limits[2], 
+                             relTol = control$rel_tol, absTol = control$abs_tol,
+                             method = control$method, maxEval = control$max_eval,
+                             nVec = 100,
+                             x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                             log_offset = log_offset)
+  } else {
+    int_limits <- get_intLimits2(x = x, mu = mu, sigma = sigma)
+    
+    fit_integrate <- 
+      cubature::cubintegrate(vintegrand_dx,
+                             lower = int_limits[1], upper = int_limits[2], 
+                             relTol = control$rel_tol, absTol = control$abs_tol,
+                             method = control$method, maxEval = control$max_eval,
+                             nVec = 100,
+                             x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                             log_offset = log_offset)
+  }
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
@@ -39,6 +53,8 @@ dx <- function(x,
     fit_integrate$integral <- fit_integrate$integral * exp(log_offset)
     fit_integrate$error <- fit_integrate$error * exp(log_offset)
   }
+  
+  fit_integrate$int_limits <- int_limits
   
   if(control$only_value)
     return(fit_integrate$integral)

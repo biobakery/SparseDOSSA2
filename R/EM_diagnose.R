@@ -92,6 +92,15 @@ EM_diagnose <- function(data,
                         sigma = params$sigma, Omega = params$Omega,
                         offset_a = offset_a,
                         control = control$control_numint)
+            
+            denom2 <- dx(x = data[i_sample, , drop = TRUE],
+                        pi0 = params$pi0, mu = params$mu, 
+                        sigma = params$sigma, Omega = params$Omega,
+                        offset_a = offset_a,
+                        control = c(control$control_numint, 
+                                    list(only_value = FALSE,
+                                         proper = FALSE)),
+                        getLimits_new = TRUE)
             return(c("mean" = num$integral / denom$integral,
                      "error" = abs(num$error / denom$integral) + 
                        abs(num$integral / (denom$integral)^2 * 
@@ -99,9 +108,16 @@ EM_diagnose <- function(data,
                      "logLik" = logLik,
                      "eloga" = eloga_num$integral / denom$integral,
                      "eloga2" = eloga2_num$integral / denom$integral,
-                     "time" = Sys.time() - i_time))
+                     "time" = Sys.time() - i_time,
+                     "dx" = denom$integral,
+                     "dx2" = denom2$integral,
+                     "lower" = denom$int_limits[1],
+                     "upper" = denom$int_limits[2],
+                     "lower2" = denom2$int_limits[1],
+                     "upper2" = denom2$int_limits[2]
+                     ))
           },
-          rep(0.0, 6)
+          rep(0.0, 12)
         ) %>% t()
         ll_easums[[i_iter]] <- e_asums
         

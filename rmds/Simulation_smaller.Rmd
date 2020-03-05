@@ -1,0 +1,99 @@
+---
+title: "Simulation subset"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+library(magrittr)
+library(ggplot2)
+```
+
+```{r setup2, include=FALSE}
+# Registry
+# batchtools::makeRegistry(file.dir = "r_batchtools_reg/Simulation_smaller", package = "magrittr")
+batchtools::loadRegistry(file.dir = "r_batchtools_reg/Simulation_smaller", writeable = TRUE)
+batchtools::clearRegistry()
+
+# Grid parameters
+ncpus <- 31
+partition <- "janson"
+walltime <- 24 * 3600
+
+# Output dir
+dir_output <- "/n/janson_lab/lab/sma/sparsedossa_update/results/Simulation_smaller/"
+dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+smar::sourceDir("SparseDOSSA2/R/")
+```
+
+```{r setup simulation params}
+# dir_data <- "results/Stool_vaginal/"
+# load(paste0(dir_data, "tb_job.RData"))
+# is_sub <- c(7, 14)
+# tb_params <- tb_job %>% 
+#   dplyr::mutate(i_param = i_job) %>% 
+#   dplyr::filter(i_param %in% is_sub) %>% 
+#   dplyr::mutate(params = i_param %>% 
+#                   purrr::map(~{
+#                     load(paste0(dir_data, .x, "/K0/debug_lambda_1.RData"))
+#                     rev(l_debug$ll_params)[[1]]
+#                   })) %>% 
+#   dplyr::select(i_param, params)
+# # filter parameters so easier to get at least two observations per feature
+# tb_params <- tb_params %>% 
+#   dplyr::mutate(params_sim = params %>% 
+#                   purrr::map(filter_params))
+```
+
+```{r simulate datasets}
+set.seed(1)
+# tb_sim <- tb_params %>%
+#   tidyr::crossing(n = c(100, 1000),
+#                   R = 1:5) %>%
+#   dplyr::mutate(i_sim = seq_len(dplyr::n())) %>%
+#   dplyr::group_by(i_sim) %>%
+#   dplyr::mutate(a_samples =
+#                   simulate_a(n = n, params = params_sim[[1]]) %>%
+#                   list(),
+#                 x_samples =
+#                   t(apply(a_samples[[1]], 1, function(x) x / sum(x))) %>%
+#                   list()
+#   ) %>%
+#   dplyr::ungroup()
+# save(tb_sim, file = paste0(dir_output, "tb_sim.RData"))
+load(paste0(dir_output, "tb_sim.RData"))
+```
+```{r job grid}
+tb_job <- tb_sim %>% 
+  dplyr::mutate(i_job = seq_len(dplyr::n()))
+save(tb_job, file = paste0(dir_output, "tb_job.RData"))
+```
+
+```{r one job}
+one_job <- function(i_job) {
+  future::plan(list(future::sequential, future::sequential, future::multicore))
+  i_tb_job <- tb_job[i_job, ]
+  x_samples <- i_tb_job$x_samples[[1]]
+  
+  fit_EM <- EM_diagnose_CV(
+    data = x_samples,
+    lambdas = 10^seq(from = -1, to = 0, length.out = 11),
+    K = 5,
+    control = list(abs_tol = 1e-3,
+                   rel_tol = 1e-1,
+                   control_numint = list(method = "hcubature",
+                                         abs_tol = 0),
+                   verbose = TRUE,
+                   debug_dir = paste0(dir_output, i_job, "/")))
+  save(fit_EM, file = paste0(dir_output, "fit_", i_job, ".RData"))
+}
+```
+
+```{r submit jobs}
+time_start <- Sys.time()
+tb_ids <- batchtools::batchMap(one_job, 
+                               i_job = tb_job$i_job)
+batchtools::batchExport(mget(ls()))
+batchtools::submitJobs(resources =  list(ncpus = ncpus, partition = partition, walltime = walltime))
+print(Sys.time() - time_start)
+```

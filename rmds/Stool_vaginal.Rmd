@@ -16,8 +16,8 @@ batchtools::loadRegistry(file.dir = "r_batchtools_reg/Stool_vaginal", writeable 
 batchtools::clearRegistry()
 
 # Grid parameters
-ncpus <- 31
-partition <- "janson"
+ncpus <- 45
+partition <- "janson_cascade"
 walltime <- 10 * 3600
 
 # Output dir
@@ -27,13 +27,12 @@ smar::sourceDir("SparseDOSSA2/R/")
 ```
 
 ```{r setup simulation params}
-tb_simulation <- tidyr::crossing(
+tb_job <- tidyr::crossing(
   dataset = c("vaginal", "stool"),
-  lambda = 10^seq(from = -1, to = 0, length.out = 21),
-  maxit = 1000
-)
-save(tb_simulation, file = paste0(dir_output, "tb_simulation.RData"))
-njobs <- nrow(tb_simulation)
+  lambda = 10^seq(from = -1, to = 0, length.out = 21)
+) %>% 
+  dplyr::mutate(i_job = seq_len(dplyr::n()))
+save(tb_job, file = paste0(dir_output, "tb_job.RData"))
 ```
 
 ```{r load datasets}
@@ -57,24 +56,21 @@ x_samples_stool <- apply(x_samples_stool, 1, function(x) x / sum(x)) %>%
 ```{r simulation task}
 one_job <- function(i_job) {
   future::plan(list(future::sequential, future::sequential, future::multicore))
-  i_tb_simulation <- tb_simulation[i_job, ]
-  if(i_tb_simulation$dataset == "vaginal")
+  i_tb_job <- tb_job[i_job, ]
+  if(i_tb_job$dataset == "vaginal")
     x_samples <- x_samples_vaginal
-  if(i_tb_simulation$dataset == "stool")
+  if(i_tb_job$dataset == "stool")
     x_samples <- x_samples_stool
 
   # fit SparseDOSSA
   time_start <- Sys.time()
   fit_EM <- EM_diagnose_CV(
     data = x_samples,
-    lambdas = i_tb_simulation$lambda,
-    K = 2,
-    control = list(maxit = i_tb_simulation$maxit,
-                   abs_tol = 1e-3,
-                   rel_tol = 1e-2,
-                   control_numint = list(limit_max = 1400,
-                                         limit_min = 1e-14,
-                                         method = "hcubature",
+    lambdas = i_tb_job$lambda,
+    K = 5,
+    control = list(abs_tol = 1e-3,
+                   rel_tol = 1e-1,
+                   control_numint = list(method = "hcubature",
                                          abs_tol = 0),
                    verbose = TRUE,
                    debug_dir = paste0(dir_output, i_job, "/")))
@@ -85,34 +81,8 @@ one_job <- function(i_job) {
 ```{r submit jobs}
 time_start <- Sys.time()
 tb_ids <- batchtools::batchMap(one_job, 
-                               i_job = njobs)
+                               i_job = tb_job$i_job)
 batchtools::batchExport(mget(ls()))
 batchtools::submitJobs(resources =  list(ncpus = ncpus, partition = partition, walltime = walltime))
 print(Sys.time() - time_start)
-```
-
-```{r debug}
-load("results/Stool_vaginal/42/CV_folds.RData")
-load("results/Stool_vaginal/42/K0/debug_lambda_1.RData")
-params_full <- rev(l_debug$ll_params)[[1]]
-e_asums <- rev(l_debug$ll_easums)[[1]]
-load("results/Stool_vaginal/42/K2/debug_lambda_1.RData")
-params_CV <- rev(l_debug$ll_params)[[1]]
-l_filtering <- l_debug$l_filtering
-data <- x_samples_vaginal
-params <- fill_estimates_CV(params_CV, params_full, l_filtering$ind_feature)
-k <- 2
-data_testing <- data[CV_folds == k, ]
-logLiks <- c()
-control <- do.call(control_EM, list())
-for(i_sample in seq_len(nrow(data_testing))) {
-  if(i_sample %% 10 == 0) print(i_sample)
-  logLik <- log_dx(x = data_testing[i_sample, , drop = TRUE],
-                   pi0 = params$pi0, mu = params$mu,
-                   sigma = params$sigma, Omega = params$Omega,
-                   offset_a = 1,
-                   control = control$control_numint)
-  logLiks <- c(logLiks, logLik)
-}
-offset_a <- e_asums[CV_folds == k, ][29, ][1]
 ```

@@ -34,11 +34,16 @@ EM_diagnose <- function(data,
       # Initialize using relative abundances
       fit_copulasso <- copulasso(data = data, 
                                  lambda_list = lambda,
-                                 K_CV = NULL) ## FIXME
+                                 K_CV = NULL,
+                                 threshold_zero = control$threshold_zero,
+                                 debug_file = paste0(control$debug_dir,
+                                                     "debug_glasso_lambda_", i_lambda,
+                                                     ".RData")) ## FIXME
       params <- list(pi0 = fit_marginals[, 1],
                      mu = fit_marginals[,2],
                      sigma = fit_marginals[, 3],
-                     Sigma = solve(fit_copulasso$fits[[1]]),
+                     Sigma = threshold_matrix(solve(fit_copulasso$fits[[1]]),
+                                              threshold_zero = control$threshold_zero),
                      Omega = fit_copulasso$fits[[1]])
       
       i_iter <- 0
@@ -57,68 +62,41 @@ EM_diagnose <- function(data,
           seq_len(nrow(data)),
           function(i_sample) {
             i_time <- Sys.time()
-            if(i_iter == 1) offset_a <- 1
-            else offset_a <- ll_easums[[i_iter - 1]][i_sample, 1]
             num <- ea(x = data[i_sample, , drop = TRUE],
                       pi0 = params$pi0, mu = params$mu, 
                       sigma = params$sigma, Omega = params$Omega,
-                      offset_a = offset_a,
                       control = c(control$control_numint, 
-                                  list(only_value = FALSE,
-                                       proper = FALSE)))
+                                  list(only_value = FALSE)))
             eloga_num <- eloga(x = data[i_sample, , drop = TRUE],
                                pi0 = params$pi0, mu = params$mu, 
                                sigma = params$sigma, Omega = params$Omega,
-                               offset_a = offset_a,
                                control = c(control$control_numint, 
-                                           list(only_value = FALSE,
-                                                proper = FALSE)))
+                                           list(only_value = FALSE)))
             eloga2_num <- eloga2(x = data[i_sample, , drop = TRUE],
                                  pi0 = params$pi0, mu = params$mu, 
                                  sigma = params$sigma, Omega = params$Omega,
-                                 offset_a = offset_a,
                                  control = c(control$control_numint, 
-                                             list(only_value = FALSE,
-                                                  proper = FALSE)))
+                                             list(only_value = FALSE)))
             denom <- dx(x = data[i_sample, , drop = TRUE],
                         pi0 = params$pi0, mu = params$mu, 
                         sigma = params$sigma, Omega = params$Omega,
-                        offset_a = offset_a,
                         control = c(control$control_numint, 
-                                    list(only_value = FALSE,
-                                         proper = FALSE)))
-            logLik <- log_dx(x = data[i_sample, , drop = TRUE],
-                        pi0 = params$pi0, mu = params$mu,
-                        sigma = params$sigma, Omega = params$Omega,
-                        offset_a = offset_a,
-                        control = control$control_numint)
+                                    list(only_value = FALSE)))
             
-            denom2 <- dx(x = data[i_sample, , drop = TRUE],
-                        pi0 = params$pi0, mu = params$mu, 
-                        sigma = params$sigma, Omega = params$Omega,
-                        offset_a = offset_a,
-                        control = c(control$control_numint, 
-                                    list(only_value = FALSE,
-                                         proper = FALSE)),
-                        getLimits_new = TRUE)
             return(c("mean" = num$integral / denom$integral,
                      "error" = abs(num$error / denom$integral) + 
                        abs(num$integral / (denom$integral)^2 * 
                              denom$error),
-                     "logLik" = logLik,
+                     "logLik" = log(denom$integral),
                      "eloga" = eloga_num$integral / denom$integral,
                      "eloga2" = eloga2_num$integral / denom$integral,
-                     "time" = Sys.time() - i_time,
-                     "dx" = denom$integral,
-                     "dx2" = denom2$integral,
-                     "lower" = denom$int_limits[1],
-                     "upper" = denom$int_limits[2],
-                     "lower2" = denom2$int_limits[1],
-                     "upper2" = denom2$int_limits[2]
+                     "time" = Sys.time() - i_time
                      ))
           },
-          rep(0.0, 12)
+          rep(0.0, 6)
         ) %>% t()
+        if(any(is.na(e_asums)))
+          stop("Integration in E step returned NAs!")
         ll_easums[[i_iter]] <- e_asums
         
         ## M step
@@ -129,11 +107,13 @@ EM_diagnose <- function(data,
                                  mu = fit_marginals[, 2])
         fit_copulasso <- copulasso(data = a_data, 
                                    lambda_list = lambda,
-                                   K_CV = NULL) ## FIXME
+                                   K_CV = NULL,
+                                   threshold_zero = control$threshold_zero) ## FIXME
         params_new <- list(pi0 = fit_marginals[, 1],
                            mu = fit_marginals[, 2],
                            sigma = fit_sigmas,
-                           Sigma = solve(fit_copulasso$fits[[1]]),
+                           Sigma = threshold_matrix(solve(fit_copulasso$fits[[1]]),
+                                                    threshold_zero = control$threshold_zero),
                            Omega = fit_copulasso$fits[[1]])
         
         diff_abs <- vapply(c("sigma", "Sigma"), 
@@ -231,7 +211,7 @@ EM_diagnose_CV <- function(data,
       # Fill in parameters estimates for features not present in training data
       for(i_lambda in seq_along(lambdas))
         result_k$l_fits[[i_lambda]]$fit <- fill_estimates_CV(result_k$l_fits[[i_lambda]]$fit,
-                                                             l_fits_full$l_fits[[i_lambda]]$fit,
+                                                             l_fits_full[[i_lambda]]$fit,
                                                              result_k$l_filtering$ind_feature)
       
       # Calculate ll in testing data
@@ -242,11 +222,11 @@ EM_diagnose_CV <- function(data,
           future.apply::future_sapply(
             seq_len(nrow(data_testing)),
             function(i_sample) {
-              logLik <- log_dx(x = data_testing[i_sample, , drop = TRUE],
-                               pi0 = params$pi0, mu = params$mu,
-                               sigma = params$sigma, Omega = params$Omega,
-                               offset_a = 1,
-                               control = control$control_numint)
+              logLik <- dx(x = data_testing[i_sample, , drop = TRUE],
+                           pi0 = params$pi0, mu = params$mu,
+                           sigma = params$sigma, Omega = params$Omega,
+                           control = control$control_numint,
+                           log.p = TRUE)
             })
         })
       
@@ -275,14 +255,16 @@ EM_diagnose_CV <- function(data,
 
 control_EM <- function(maxit = 1000,
                        rel_tol = 1e-3,
-                       abs_tol = 1e-3,
+                       abs_tol = 1e-2,
                        control_numint = list(),
+                       threshold_zero = 1e-16,
                        verbose = FALSE,
                        debug_dir = NULL) {
   list(maxit = maxit,
        rel_tol = rel_tol,
        abs_tol = abs_tol,
        control_numint = control_numint,
+       threshold_zero = threshold_zero,
        verbose = verbose,
        debug_dir = debug_dir)
 }

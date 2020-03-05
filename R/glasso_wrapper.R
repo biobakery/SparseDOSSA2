@@ -2,7 +2,8 @@ glasso_wrapper <- function(S, lambda, source = "huge",
                            simplify = FALSE,
                            symm = TRUE,
                            corr = TRUE,
-                           tol = 1e-15) {
+                           threshold_zero = 1e-16,
+                           debug_file = NULL) {
   Omega <- diag(1/(diag(S) + lambda))
   
   if(simplify) 
@@ -34,23 +35,21 @@ glasso_wrapper <- function(S, lambda, source = "huge",
     }
   }
   
-  # if(!is.null(threshold)) {
-  #   diag_Omega <- diag(Omega)
-  #   Omega[abs(Omega) < threshold] <- 0
-  #   diag(Omega) <- diag_Omega
-  # }
+  if(!is.null(debug_file))
+    save(Omega, file = debug_file)
+
   if(any(is.na(Omega))) {
     print("Missing values in Omega estimation! (lambda to small?)") # FIXME
     stop("Missing values in Omega estimation! (lambda to small?)")
   }
   
-  if(symm)
+  if(symm) {
     Omega <- enforce_symm(Omega, method = "svd")
-  
+  }
   if(corr) {
     Omega <- enforce_corr(Omega)
   }
+  Omega <- threshold_matrix(Omega, threshold_zero = threshold_zero)
   
-  Omega[abs(Omega) < tol] <- 0
   return(Omega)
 }

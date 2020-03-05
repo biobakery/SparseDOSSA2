@@ -39,6 +39,7 @@ enforce_symm <- function(x, method = "svd") {
       svd_fit$d <- abs(svd_fit$d) ## FIXME
       x_out <- svd_fit$u %*% diag(svd_fit$d) %*% t(svd_fit$u)
       # I don't know how this could happen, but even after this x_out can still be not symmetric!
+      ## FIXME
       x_out[upper.tri(x_out)] <- upper_tri(t(x_out), warning = FALSE)
     }
   }
@@ -95,65 +96,78 @@ get_sigmas <- function(x, eloga, eloga2, mu) {
          0.0)
 }
 
-get_intLimits <- function(f, 
-                          center = 0, limit_max, limit_min, step_size,
-                          lower_bound = -1000, upper_bound = 1000,
-                          max_try = 20,
-                          ...) {
-  i_try <- 0
-  while(TRUE) { ## FIXME
-    i_try <- i_try + 1
-    if(i_try > max_try)
-      stop("Could not find positive values for f!")
-    
-    vchange <- exp(seq(from = log(limit_max),
-                       to = log(limit_min),
-                       by = -log(step_size)))
-    
-    vlim <- c(center - vchange,
-              center,
-              center + rev(vchange))
-    vlim <- vlim[exp(vlim) > 0] ## FIXME??
-    
-    vval <- f(vlim, ...)
-    if(any(vval < 0))
-      stop("There are negative values of f!")
-    vflag <- vval > 0
-    if(sum(vflag) > 1)
-      break
-    
-    step_size <- sqrt(step_size)
-  }
-  vindex <- which(vflag)
-  if(vflag[1]) {
-    warning("f is already positive at maximum lower limit!")
-    lower <- lower_bound
-  } else {
-    lower <- vlim[min(vindex) - 1]
-  }
-  if(rev(vflag)[1]) {
-    warning("f is already positive at maximum upper limit!")
-    upper <- upper_bound
-  } else {
-    upper <- vlim[max(vindex) + 1]
-  }
-  
-  return(c(lower, upper))
-}
+# get_intLimits <- function(f, 
+#                           center = 0, limit_max, limit_min, step_size,
+#                           lower_bound = -1000, upper_bound = 1000,
+#                           max_try = 20,
+#                           ...) {
+#   i_try <- 0
+#   while(TRUE) { ## FIXME
+#     i_try <- i_try + 1
+#     if(i_try > max_try)
+#       stop("Could not find positive values for f!")
+#     
+#     vchange <- exp(seq(from = log(limit_max),
+#                        to = log(limit_min),
+#                        by = -log(step_size)))
+#     
+#     vlim <- c(center - vchange,
+#               center,
+#               center + rev(vchange))
+#     vlim <- vlim[exp(vlim) > 0] ## FIXME??
+#     
+#     vval <- f(vlim, ...)
+#     if(any(vval < 0))
+#       stop("There are negative values of f!")
+#     vflag <- vval > 0
+#     if(sum(vflag) > 1)
+#       break
+#     
+#     step_size <- sqrt(step_size)
+#   }
+#   vindex <- which(vflag)
+#   if(vflag[1]) {
+#     warning("f is already positive at maximum lower limit!")
+#     lower <- lower_bound
+#   } else {
+#     lower <- vlim[min(vindex) - 1]
+#   }
+#   if(rev(vflag)[1]) {
+#     warning("f is already positive at maximum upper limit!")
+#     upper <- upper_bound
+#   } else {
+#     upper <- vlim[max(vindex) + 1]
+#   }
+#   
+#   return(c(lower, upper))
+# }
 
-get_intLimits2 <- function(x, mu, sigma) {
+get_intLimits <- function(x, pi0, mu, sigma, Omega,
+                          n_vals = 10, step_size = 2, max_iter = 20) {
   ind_nonzero <- x != 0
   logx <- log(x[ind_nonzero])
-  mu <- mu[ind_nonzero]
-  sigma <- sigma[ind_nonzero]
-  mat_range <- cbind(mu - logx - sqrt(1500)*sigma,
-                 mu - logx + sqrt(1500)*sigma)
-  range <- c("lower" = max(mat_range[, 1]), 
-             "upper" = min(mat_range[, 2]))
-  if(range[1] >= range[2])
-    stop("There is no possible range!")
+  mat_range <- cbind(mu[ind_nonzero] - logx - sqrt(1500)*sigma[ind_nonzero],
+                 mu[ind_nonzero] - logx + sqrt(1500)*sigma[ind_nonzero])
+  range <- c(max(mat_range[, 1]), 
+             min(mat_range[, 2]))
   
-  return(range)
+  if(range[1] >= range[2])
+    return(c(0, 0)) ## FIXME??
+
+  i_iter <- 0
+  while(TRUE) { ## FIXME
+    if(i_iter + 1 > max_iter)
+      stop("Could not find positive values!")
+    i_iter <- i_iter + 1
+    
+    vlim <- seq(from = range[1], to = range[2], length.out = n_vals)
+    vval <- vintegrand_dx(log_asum = vlim, x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+    vflag <- vval > 0
+    if(sum(vflag) > 1)
+      return(vlim[c(min(which(vflag)) - 1, max(which(vflag)) + 1)])
+    
+    n_vals <- n_vals * step_size
+  }
 }
 
 get_offset <- function(x, 
@@ -306,4 +320,14 @@ fill_estimates_CV <- function(params_CV, params_full, ind_feature) {
     params_return[[param]][ind_feature, ind_feature] <- params_CV[[param]]
   
   return(params_return)
+}
+
+threshold_matrix <- function(x, threshold_zero = 1e-16) {
+  ## FIXME
+  if(!is.null(threshold_zero)) {
+    diag_x <- diag(x)
+    x[abs(x) < threshold_zero] <- 0
+    diag(x) <- diag_x
+  }
+  return(x)
 }

@@ -12,7 +12,9 @@
 #' @examples
 copulasso <- function(data, lambda_list,
                       gamma_EBIC = 0.5,
-                      K_CV = 5) {
+                      threshold_zero = 1e-16,
+                      K_CV = 5,
+                      debug_file = NULL) {
 
   df_eval <- data.frame(lambda = lambda_list,
                         df = NA_real_,
@@ -25,7 +27,9 @@ copulasso <- function(data, lambda_list,
     lambda_list,
     function(lambda) {
       fit_glasso <- glasso_wrapper(S = s_data,
-                                   lambda = lambda)
+                                   lambda = lambda,
+                                   threshold_zero = threshold_zero,
+                                   debug_file = debug_file)
       df <- (sum(fit_glasso != 0) - ncol(data)) / 2
       negLogLik <- negLogLik_mvn(S = s_data, Omega = fit_glasso)
       AIC <- negLogLik * nrow(s_data) + 2 * df
@@ -57,7 +61,8 @@ copulasso <- function(data, lambda_list,
         l_fit_glasso <- lapply(lambda_list,
                                function(lambda)
                                  glasso_wrapper(S = s_train,
-                                                lambda = lambda)
+                                                lambda = lambda,
+                                                threshold_zero = threshold_zero)
         )
         
         data_test <- data[folds == k, ]

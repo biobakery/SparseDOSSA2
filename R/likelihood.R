@@ -1,105 +1,30 @@
 dx <- function(x, 
                pi0, mu, sigma, Omega,
-               offset_a = 1,
                control = list(),
-               getLimits_new = FALSE) {
+               log.p = FALSE) {
   control <- do.call(control_integrate, control)
   
-  ## FIXME
-  log_offset <- dloga(a = a(x, offset_a),
-                      pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
-  if(log_offset == -Inf) 
-    stop("Something went wrong!")
-  log_offset <- 0
-  
-  if(!getLimits_new) {
-    int_limits <- get_intLimits(vintegrand_dx,
-                                center = log(offset_a),
-                                limit_max = control$limit_max,
-                                limit_min = control$limit_min,
-                                step_size = control$step_size,
-                                max_try = control$max_try,
-                                x = x, pi0 = pi0, mu = mu,
-                                sigma = sigma, Omega = Omega,
-                                log_offset = log_offset)
-    
-    fit_integrate <- 
-      cubature::cubintegrate(vintegrand_dx,
-                             lower = int_limits[1], upper = int_limits[2], 
-                             relTol = control$rel_tol, absTol = control$abs_tol,
-                             method = control$method, maxEval = control$max_eval,
-                             nVec = 100,
-                             x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-                             log_offset = log_offset)
-  } else {
-    int_limits <- get_intLimits2(x = x, mu = mu, sigma = sigma)
-    
-    fit_integrate <- 
-      cubature::cubintegrate(vintegrand_dx,
-                             lower = int_limits[1], upper = int_limits[2], 
-                             relTol = control$rel_tol, absTol = control$abs_tol,
-                             method = control$method, maxEval = control$max_eval,
-                             nVec = 100,
-                             x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-                             log_offset = log_offset)
-  }
-  
-  if(control$jacobian) {
-    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
-    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
-  }
-  
-  if(control$proper) {
-    fit_integrate$integral <- fit_integrate$integral * exp(log_offset)
-    fit_integrate$error <- fit_integrate$error * exp(log_offset)
-  }
-  
-  fit_integrate$int_limits <- int_limits
-  
-  if(control$only_value)
-    return(fit_integrate$integral)
-  else
-    return(fit_integrate)
-}
-
-log_dx <- function(x, 
-                   pi0, mu, sigma, Omega,
-                   offset_a,
-                   control = list()) {
-  control <- do.call(control_integrate, control)
-  
-  # log_offset <-
-  #   SparseDOSSA2:::dloga(a = a(x, offset_a),
-  #                        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
-  # if(log_offset == -Inf)
-  #   return(-Inf)
-  log_offset <- 0
-  
-  int_limits <- get_intLimits(vintegrand_dx,
-                              center = log(offset_a),
-                              limit_max = control$limit_max,
-                              limit_min = control$limit_min,
-                              step_size = control$step_size,
-                              max_try = control$max_try,
-                              x = x, pi0 = pi0, mu = mu,
-                              sigma = sigma, Omega = Omega,
-                              log_offset = log_offset)
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   
   fit_integrate <- 
     cubature::cubintegrate(vintegrand_dx,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
-                           nVec = 100,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-                           log_offset = log_offset)
+                           nVec = 2,
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
     fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   }
   
-  return(log(fit_integrate$integral) + log_offset)
+  if(log.p) 
+    return(log(fit_integrate$integral))
+  if(control$only_value)
+    return(fit_integrate$integral)
+  else
+    return(fit_integrate)
 }
 
 control_integrate <- function(limit_max = 50,
@@ -111,7 +36,6 @@ control_integrate <- function(limit_max = 50,
                               max_eval = 1e6,
                               method = "hcubature",
                               jacobian = FALSE,
-                              proper = TRUE,
                               only_value = TRUE) {
   list(limit_max = limit_max,
        limit_min = limit_min,
@@ -122,13 +46,12 @@ control_integrate <- function(limit_max = 50,
        max_eval = max_eval,
        method = method,
        jacobian = jacobian,
-       proper = proper,
        only_value = only_value)
 }
 
 dloga <- function(a,
                   pi0, mu, sigma, Omega, 
-                  log = TRUE) {
+                  log.p = TRUE) {
   u <- a_to_u(a,
               pi0 = pi0, mu = mu, sigma = sigma)
   g <- u_to_g(u = u, a = a, mu = mu, sigma = sigma) ## FIXME
@@ -141,19 +64,19 @@ dloga <- function(a,
       log(2 * pi) / 2 * sum(a > 0) - sum(log(sigma[a > 0])) 
   }
   
-  if(log)
+  if(log.p)
     return(log_d)
   else
     return(exp(log_d))
 }
 
-du <- function(g, Omega, log = TRUE) {
+du <- function(g, Omega, log.p = TRUE) {
   # Without normalizing constant (2pi)^(-2/p)!
   if(any(g == -Inf | g == Inf)) return(-Inf)
   log_d <- log_dmvnorm(S = g %*% t(g), Omega = Omega) + sum(g^2)/2 + 
     log(det(Omega)) / 2
   
-  if(log) 
+  if(log.p) 
     return(log_d)
   else
     return(exp(log_d))
@@ -164,55 +87,32 @@ log_dmvnorm <- function(S, Omega) {
 }
 
 integrand_dx <- function(log_asum, x, 
-                         pi0, mu, sigma, Omega,
-                         log_offset) {
-  exp(dloga(a = a(x, exp(log_asum)),
-            pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega) - 
-        log_offset)
+                         pi0, mu, sigma, Omega) {
+  dloga(a = a(x, exp(log_asum)),
+        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+        log.p = FALSE)
 }
 
 vintegrand_dx <- Vectorize2(integrand_dx, vectorize.args = "log_asum")
 
 ea <- function(x, 
                pi0, mu, sigma, Omega,
-               offset_a = 1,
                control) {
   control <- do.call(control_integrate, control)
   
-  ## FIXME
-  log_offset <- dloga(a = a(x, offset_a),
-                      pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
-  if(log_offset == -Inf) 
-    stop("Something went wrong!")
-  log_offset <- 0
-  
-  int_limits <- get_intLimits(vintegrand_dx, 
-                              center = log(offset_a),
-                              limit_max = control$limit_max, 
-                              limit_min = control$limit_min,
-                              step_size = control$step_size,
-                              max_try = control$max_try,
-                              x = x, pi0 = pi0, mu = mu, 
-                              sigma = sigma, Omega = Omega,
-                              log_offset = log_offset)
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   
   fit_integrate <- 
     cubature::cubintegrate(vintegrand_ea,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
-                           nVec = 100,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-                           log_offset = log_offset) 
+                           nVec = 2,
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
     fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
-  }
-  
-  if(control$proper) {
-    fit_integrate$integral <- fit_integrate$integral * exp(log_offset)
-    fit_integrate$error <- fit_integrate$error * exp(log_offset)
   }
   
   if(control$only_value)
@@ -222,12 +122,10 @@ ea <- function(x,
 }
 
 integrand_ea <- function(log_asum, x, 
-                         pi0, mu, sigma, Omega, 
-                         log_offset) {
+                         pi0, mu, sigma, Omega) {
   exp(dloga(a = a(x, exp(log_asum)),
             pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-            log = TRUE) - 
-        log_offset + log_asum)
+            log.p = TRUE) + log_asum)
 }
 
 vintegrand_ea <- Vectorize2(integrand_ea, 
@@ -235,44 +133,22 @@ vintegrand_ea <- Vectorize2(integrand_ea,
 
 eloga <- function(x, 
                   pi0, mu, sigma, Omega,
-                  offset_a = 1,
                   control) {
   control <- do.call(control_integrate, control)
   
-  ## FIXME
-  log_offset <- dloga(a = a(x, offset_a),
-                      pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
-  if(log_offset == -Inf) 
-    stop("Something went wrong!")
-  log_offset <- 0
-  
-  int_limits <- get_intLimits(vintegrand_dx, 
-                              center = log(offset_a),
-                              limit_max = control$limit_max, 
-                              limit_min = control$limit_min,
-                              step_size = control$step_size,
-                              max_try = control$max_try,
-                              x = x, pi0 = pi0, mu = mu, 
-                              sigma = sigma, Omega = Omega,
-                              log_offset = log_offset)
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   
   fit_integrate <- 
     cubature::cubintegrate(vintegrand_eloga,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
-                           nVec = 100,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-                           log_offset = log_offset)
+                           nVec = 2,
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
     fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
-  }
-  
-  if(control$proper) {
-    fit_integrate$integral <- fit_integrate$integral * exp(log_offset)
-    fit_integrate$error <- fit_integrate$error * exp(log_offset)
   }
   
   if(control$only_value)
@@ -282,12 +158,10 @@ eloga <- function(x,
 }
 
 integrand_eloga <- function(log_asum, x, 
-                            pi0, mu, sigma, Omega, 
-                            log_offset) {
-  exp(dloga(a = a(x, exp(log_asum)),
-            pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-            log = TRUE) - 
-        log_offset) * log_asum
+                            pi0, mu, sigma, Omega) {
+  dloga(a = a(x, exp(log_asum)),
+        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+        log.p = FALSE) * log_asum
 }
 
 vintegrand_eloga <- Vectorize2(integrand_eloga, 
@@ -295,44 +169,22 @@ vintegrand_eloga <- Vectorize2(integrand_eloga,
 
 eloga2 <- function(x, 
                    pi0, mu, sigma, Omega,
-                   offset_a = 1,
                    control) {
   control <- do.call(control_integrate, control)
   
-  ## FIXME
-  log_offset <- dloga(a = a(x, offset_a),
-                      pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
-  if(log_offset == -Inf) 
-    stop("Something went wrong!")
-  log_offset <- 0
-  
-  int_limits <- get_intLimits(vintegrand_dx, 
-                              center = log(offset_a),
-                              limit_max = control$limit_max, 
-                              limit_min = control$limit_min,
-                              step_size = control$step_size,
-                              max_try = control$max_try,
-                              x = x, pi0 = pi0, mu = mu, 
-                              sigma = sigma, Omega = Omega,
-                              log_offset = log_offset)
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   
   fit_integrate <- 
     cubature::cubintegrate(vintegrand_eloga2,
                            lower = int_limits[1], upper = int_limits[2], 
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
-                           nVec = 100,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-                           log_offset = log_offset)
+                           nVec = 2,
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
     fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
-  }
-  
-  if(control$proper) {
-    fit_integrate$integral <- fit_integrate$integral * exp(log_offset)
-    fit_integrate$error <- fit_integrate$error * exp(log_offset)
   }
   
   if(control$only_value)
@@ -342,12 +194,10 @@ eloga2 <- function(x,
 }
 
 integrand_eloga2 <- function(log_asum, x, 
-                             pi0, mu, sigma, Omega, 
-                             log_offset) {
-  exp(dloga(a = a(x, exp(log_asum)),
-            pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-            log = TRUE) - 
-        log_offset) * log_asum^2
+                             pi0, mu, sigma, Omega) {
+  dloga(a = a(x, exp(log_asum)),
+        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+        log.p = FALSE) * log_asum^2
 }
 
 vintegrand_eloga2 <- Vectorize2(integrand_eloga2, 
@@ -364,7 +214,7 @@ log_intx_dc <- function(data, zero_inflation = TRUE) {
   }
 }
 
-ddirichlet <- function (x, alpha, log = TRUE) 
+ddirichlet <- function (x, alpha, log.p = TRUE) 
 {
   
   if (!is.matrix(x)) {
@@ -379,7 +229,7 @@ ddirichlet <- function (x, alpha, log = TRUE)
     stop("Mismatch between dimensions of x and alpha in ddirichlet().\n")
   pd <- vector(length = nrow(x))
   for (i in 1:nrow(x)) pd[i] <- ddirichlet1(x[i, ], alpha[i, ])
-  if(!log) pd <- exp(pd)
+  if(!log.p) pd <- exp(pd)
   return(pd)
 }
 

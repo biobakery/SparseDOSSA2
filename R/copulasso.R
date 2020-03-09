@@ -14,6 +14,7 @@ copulasso <- function(data, lambda_list,
                       gamma_EBIC = 0.5,
                       threshold_zero = 1e-16,
                       K_CV = 5,
+                      glasso_method = "huge",
                       debug_file = NULL) {
 
   df_eval <- data.frame(lambda = lambda_list,
@@ -29,6 +30,7 @@ copulasso <- function(data, lambda_list,
       fit_glasso <- glasso_wrapper(S = s_data,
                                    lambda = lambda,
                                    threshold_zero = threshold_zero,
+                                   glasso_method = glasso_method,
                                    debug_file = debug_file)
       df <- (sum(fit_glasso != 0) - ncol(data)) / 2
       negLogLik <- negLogLik_mvn(S = s_data, Omega = fit_glasso)
@@ -62,7 +64,9 @@ copulasso <- function(data, lambda_list,
                                function(lambda)
                                  glasso_wrapper(S = s_train,
                                                 lambda = lambda,
-                                                threshold_zero = threshold_zero)
+                                                threshold_zero = threshold_zero,
+                                                glasso_method = glasso_method,
+                                                debug_file = debug_file)
         )
         
         data_test <- data[folds == k, ]

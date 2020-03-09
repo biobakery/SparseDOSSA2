@@ -35,9 +35,16 @@ enforce_symm <- function(x, method = "svd") {
       x_out[lower.tri(x_out)] <- lower_tri(t(x_out), warning = FALSE)
     if(method == "svd") {
       svd_fit <- svd(x)
-      # in case it's not pos-def 
+      if(Matrix::rankMatrix(svd_fit$u) < nrow(x)) 
+        # Sometimes svd run into weird cases where the matrix is not singular but the 
+        # eigen vector matrix is
+        svd_fit <- svd(x + diag(rep(1e-16, nrow(x))))
+      
+      # In case it's not pos-def 
       svd_fit$d <- abs(svd_fit$d) ## FIXME
+      
       x_out <- svd_fit$u %*% diag(svd_fit$d) %*% t(svd_fit$u)
+      
       # I don't know how this could happen, but even after this x_out can still be not symmetric!
       ## FIXME
       x_out[upper.tri(x_out)] <- upper_tri(t(x_out), warning = FALSE)
@@ -146,8 +153,8 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega,
                           n_vals = 10, step_size = 2, max_iter = 20) {
   ind_nonzero <- x != 0
   logx <- log(x[ind_nonzero])
-  mat_range <- cbind(mu[ind_nonzero] - logx - sqrt(1500)*sigma[ind_nonzero],
-                 mu[ind_nonzero] - logx + sqrt(1500)*sigma[ind_nonzero])
+  mat_range <- cbind(mu[ind_nonzero] - logx - sqrt(2000)*sigma[ind_nonzero],
+                 mu[ind_nonzero] - logx + sqrt(2000)*sigma[ind_nonzero])
   range <- c(max(mat_range[, 1]), 
              min(mat_range[, 2]))
   
@@ -163,8 +170,11 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega,
     vlim <- seq(from = range[1], to = range[2], length.out = n_vals)
     vval <- vintegrand_dx(log_asum = vlim, x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
     vflag <- vval > 0
+    if(vflag[1] | rev(vflag)[1])
+      stop("Positive dx values at integration limits!")
     if(sum(vflag) > 1)
-      return(vlim[c(min(which(vflag)) - 1, max(which(vflag)) + 1)])
+      return(vlim[c(min(which(vflag)) - 1, 
+                    max(which(vflag)) + 1)])
     
     n_vals <- n_vals * step_size
   }

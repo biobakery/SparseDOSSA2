@@ -145,6 +145,7 @@ EM_diagnose <- function(data,
           converge <- TRUE
           break
         }
+        if(any(params$sigma < control$sigma_tol)) break
       }
       
       list(lambda = lambda,
@@ -258,6 +259,7 @@ EM_diagnose_CV <- function(data,
 control_EM <- function(maxit = 1000,
                        rel_tol = 1e-3,
                        abs_tol = 1e-2,
+                       sigma_tol = 3e-8,
                        control_numint = list(),
                        glasso_method = "huge",
                        threshold_zero = 1e-16,
@@ -266,6 +268,7 @@ control_EM <- function(maxit = 1000,
   list(maxit = maxit,
        rel_tol = rel_tol,
        abs_tol = abs_tol,
+       sigma_tol = sigma_tol,
        control_numint = control_numint,
        glasso_method = glasso_method,
        threshold_zero = threshold_zero,

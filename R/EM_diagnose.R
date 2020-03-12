@@ -33,9 +33,8 @@ EM_diagnose <- function(data,
       
       # Initialize using relative abundances
       fit_copulasso <- copulasso(data = data, 
-                                 lambda_list = lambda,
-                                 K_CV = NULL,
-                                 glasso_method = control$glasso_method,
+                                 lambda = lambda,
+                                 penalize_method = control$penalize_method,
                                  threshold_zero = control$threshold_zero,
                                  debug_file = paste0(control$debug_dir,
                                                      "debug_glasso_lambda_", i_lambda,
@@ -43,17 +42,29 @@ EM_diagnose <- function(data,
       params <- list(pi0 = fit_marginals[, 1],
                      mu = fit_marginals[,2],
                      sigma = fit_marginals[, 3],
-                     Sigma = threshold_matrix(solve(fit_copulasso$fits[[1]]),
+                     Sigma = threshold_matrix(solve(fit_copulasso$Omega),
                                               threshold_zero = control$threshold_zero),
-                     Omega = fit_copulasso$fits[[1]])
+                     Omega = fit_copulasso$Omega,
+                     diff = rep(NA_real_, 4),
+                     logLik = NA_real_,
+                     time = Sys.time())
       
       i_iter <- 0
       converge <- FALSE
+      if(fit_copulasso$copulasso_code != 0) {
+        warning("Missing values in Omega estimation! (lambda to small?)")
+        return(list(lambda = lambda,
+                    fit = params,
+                    convergence = list(converge = converge,
+                                       converge_code = 4,
+                                       n_iter = i_iter)))
+      }
+        
+      
       ll_easums <- list()
       ll_params <- list()
       while(TRUE) {
-        time <- Sys.time()
-        if(i_iter + 1 > control$maxit) break
+        if(control$verbose) message("EM iteration ", i_iter + 1)
         i_iter <- i_iter + 1
         if(control$verbose)
           message("EM iteration ", i_iter)
@@ -96,8 +107,16 @@ EM_diagnose <- function(data,
           },
           rep(0.0, 6)
         ) %>% t()
-        if(any(is.na(e_asums)))
-          stop("Integration in E step returned NAs!")
+        if(any(is.na(e_asums[, c(1, 3, 4, 5)]))) {
+          warning("Numeric integration in E step returned NAs!")
+          converge_code <- 3
+          break
+        }
+        if(any(e_asums[, 4]^2 > e_asums[, 5])) {
+          warning("Numeric integration in E step gave bad expectation values!")
+          converge_code <- 2
+          break
+        }
         ll_easums[[i_iter]] <- e_asums
         
         ## M step
@@ -107,17 +126,20 @@ EM_diagnose <- function(data,
                                  eloga2 = e_asums[, "eloga2"], 
                                  mu = fit_marginals[, 2])
         fit_copulasso <- copulasso(data = a_data, 
-                                   lambda_list = lambda,
-                                   K_CV = NULL,
-                                   glasso_method = control$glasso_method,
+                                   lambda = lambda,
+                                   penalize_method = control$penalize_method,
                                    threshold_zero = control$threshold_zero) ## FIXME
+        if(fit_copulasso$copulasso_code != 0) {
+          warning("Missing values in Omega estimation! (lambda to small?)")
+          converge_code <- 4
+          break
+        }
         params_new <- list(pi0 = fit_marginals[, 1],
                            mu = fit_marginals[, 2],
                            sigma = fit_sigmas,
-                           Sigma = threshold_matrix(solve(fit_copulasso$fits[[1]]),
+                           Sigma = threshold_matrix(solve(fit_copulasso$Omega),
                                                     threshold_zero = control$threshold_zero),
-                           Omega = fit_copulasso$fits[[1]])
-        
+                           Omega = fit_copulasso$Omega)
         diff_abs <- vapply(c("sigma", "Sigma"), 
                            function(i_param)
                              get_diff(params_new[[i_param]], params[[i_param]], 
@@ -128,12 +150,11 @@ EM_diagnose <- function(data,
                              get_diff(params_new[[i_param]], params[[i_param]], 
                                       denom_c = control$abs_tol, method = "rel"),
                            0.0)
-        
-        ll_params[[i_iter]] <- c(params_new,
-                                 list(diff = c(diff_abs, diff_rel),
-                                      logLik = mean(ll_easums[[i_iter]][, 3]),
-                                      time = Sys.time() - time))
-        params <- params_new
+        params <- c(params_new,
+                    list(diff = c(diff_abs, diff_rel),
+                         logLik = mean(e_asums[, 3]),
+                         time = Sys.time()))
+        ll_params[[i_iter]] <- params
         
         if(!is.null(control$debug_dir)) {
           l_debug <- list(ll_easums = ll_easums, ll_params = ll_params, l_filtering = l_filtering)
@@ -143,15 +164,21 @@ EM_diagnose <- function(data,
         
         if(max(diff_abs) < control$abs_tol & max(diff_rel) < control$rel_tol) {
           converge <- TRUE
+          converge_code <- 0
           break
         }
-        if(any(params$sigma < control$sigma_tol)) break
+        if(i_iter + 1 > control$maxit) {
+          warning("Maximum EM iteration reached!")
+          converge_code <- 1
+          break
+        }
       }
       
-      list(lambda = lambda,
-           fit = ll_params[[i_iter]],
-           convergence = list(converge = converge,
-                              n_iter = i_iter))
+      return(list(lambda = lambda,
+                  fit = params,
+                  convergence = list(converge = converge,
+                                     converge_code = converge_code,
+                                     n_iter = i_iter)))
     })
   }
   
@@ -256,21 +283,19 @@ EM_diagnose_CV <- function(data,
               CV_folds = CV_folds))
 }
 
-control_EM <- function(maxit = 1000,
+control_EM <- function(maxit = 100,
                        rel_tol = 1e-3,
                        abs_tol = 1e-2,
-                       sigma_tol = 3e-8,
                        control_numint = list(),
-                       glasso_method = "huge",
+                       penalize_method = "huge",
                        threshold_zero = 1e-16,
                        verbose = FALSE,
                        debug_dir = NULL) {
   list(maxit = maxit,
        rel_tol = rel_tol,
        abs_tol = abs_tol,
-       sigma_tol = sigma_tol,
        control_numint = control_numint,
-       glasso_method = glasso_method,
+       penalize_method = penalize_method,
        threshold_zero = threshold_zero,
        verbose = verbose,
        debug_dir = debug_dir)

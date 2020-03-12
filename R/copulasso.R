@@ -1,88 +1,68 @@
-#' Title
-#'
-#' @param data 
-#' @param lambda_list 
-#' @param gamma_EBIC 
-#' @param K_CV 
-#'
-#' @return
-#' @importFrom magrittr `%>%`
-#' @export
-#'
-#' @examples
-copulasso <- function(data, lambda_list,
-                      gamma_EBIC = 0.5,
+copulasso <- function(data, lambda, 
+                      penalize_method = "huge",
+                      simplify = FALSE,
+                      symm = TRUE,
+                      corr = TRUE,
                       threshold_zero = 1e-16,
-                      K_CV = 5,
-                      glasso_method = "huge",
                       debug_file = NULL) {
-
-  df_eval <- data.frame(lambda = lambda_list,
-                        df = NA_real_,
-                        AIC = NA_real_,
-                        BIC = NA_real_,
-                        EBIC = NA_real_)
-  s_data <- get_s(data = data)
-
-  l_fits_evals <- future.apply::future_lapply(
-    lambda_list,
-    function(lambda) {
-      fit_glasso <- glasso_wrapper(S = s_data,
-                                   lambda = lambda,
-                                   threshold_zero = threshold_zero,
-                                   glasso_method = glasso_method,
-                                   debug_file = debug_file)
-      df <- (sum(fit_glasso != 0) - ncol(data)) / 2
-      negLogLik <- negLogLik_mvn(S = s_data, Omega = fit_glasso)
-      AIC <- negLogLik * nrow(s_data) + 2 * df
-      BIC <- negLogLik * nrow(s_data) + log(nrow(data)) * df
-      EBIC <- BIC + 4 * gamma_EBIC * log(ncol(data)) * df
-      return(list(fit = fit_glasso,
-                  evals = c(df, AIC, BIC, EBIC)))
-    }
-  )
+  S <- get_s(data = data)
+  Omega <- diag(1/(diag(S) + lambda))
   
-  l_fits <- lapply(l_fits_evals, function(x) x$fit)
-  df_eval[, c("df", "AIC", "BIC", "EBIC")] <-
-    t(vapply(l_fits_evals,
-             function(x) x$evals,
-             rep(0.0, 4)))
-
-  if(!is.null(K_CV)) {
-    folds <- sample.int(n = K_CV, size = nrow(data), replace = TRUE)
-    ## FIXME
-    # parallelization not optimized
-    # ideally should parallel over combinations of k and lambda
-    # instead of just over k
-    negLogLik_CV <- future.apply::future_lapply(
-      sesq_len(K_CV),
-      function(k) {
-        data_train <- data[folds != k, ]
-        s_train <- get_s(data = data_train)
-        
-        l_fit_glasso <- lapply(lambda_list,
-                               function(lambda)
-                                 glasso_wrapper(S = s_train,
-                                                lambda = lambda,
-                                                threshold_zero = threshold_zero,
-                                                glasso_method = glasso_method,
-                                                debug_file = debug_file)
-        )
-        
-        data_test <- data[folds == k, ]
-        s_test <- get_s(data = data_test)
-        return(vapply(seq_along(lambda_list),
-                      function(i)
-                        negLogLik_mvn(S = s_test, Omega = l_fit_glasso[[i]]) *
-                        nrow(s_test),
-                      0.0))
-      }
-    ) %>% Reduce("+", .)
-    
-    df_eval$negLogLik_CV <- negLogLik_CV / nrow(data)
+  if(simplify) 
+    z <- which(rowSums(abs(S) > lambda) > 1)
+  else 
+    z <- seq_len(nrow(S))
+  q <- length(z)
+  if (q > 0) {
+    if(penalize_method == "huge") {
+      out.glasso <- huge::huge.glasso(x = S[z, z, drop = FALSE],
+                                      lambda = lambda,
+                                      verbose = FALSE)
+      Omega[z, z] <- out.glasso$icov[[1]]
+    }
+    if(penalize_method == "hugec") {
+      out.glasso <- .Call("_huge_hugeglasso",
+                          S[z, z, drop = FALSE],
+                          lambda,
+                          FALSE,
+                          FALSE,
+                          FALSE,
+                          PACKAGE = "huge")
+      Omega[z, z] <- out.glasso$icov[[1]]
+    }
+    if(penalize_method == "glasso") {
+      out.glasso <- glasso::glasso(s = S[z, z, drop = FALSE],
+                                   rho = lambda)
+      Omega[z, z] <- out.glasso$wi
+    }
+    if(penalize_method %in% c("ridge1", "ridge2")) {
+      out.glasso <- solve_ridge(S[z, z, drop = FALSE],
+                                lambda,
+                                method = penalize_method)
+      Omega[z, z] <- out.glasso
+    }
   }
+  
+  if(!is.null(debug_file))
+    save(Omega, file = debug_file)
 
-  return(list(fits = l_fits, df_eval = df_eval))
+  if(any(is.na(Omega))) {
+    # warning("Missing values in Omega estimation! (lambda to small?)") # FIXME
+    Omega <- diag(rep(1, nrow(Omega)))
+    return(list(Omega = Omega,
+                copulasso_code = 1))
+  }
+  
+  if(symm) {
+    Omega <- enforce_symm(Omega, method = "svd")
+  }
+  if(corr) {
+    Omega <- enforce_corr(Omega)
+  }
+  Omega <- threshold_matrix(Omega, threshold_zero = threshold_zero)
+  
+  return(list(Omega = Omega,
+              copulasso_code = 0))
 }
 
 iRho <- function(rho_s) sinpi(rho_s/6) * 2
@@ -98,4 +78,14 @@ get_s <- function(data, method = "spearman",
 
 negLogLik_mvn <- function(S, Omega) { ##FIXME
   -log(det(Omega)) + sum(Omega * S)
+}
+
+solve_ridge <- function(S, lambda, method = "ridge1") {
+  svd_fit <- svd(S)
+  if(method == "ridge1")
+    eigen_inv <- (sqrt(svd_fit$d^2 + 4 * lambda) - svd_fit$d) / 2 / lambda
+  if(method == "ridge2")
+    eigen_inv <- 1 / (svd_fit$d + lambda)
+  
+  return(svd_fit$u %*% diag(eigen_inv) %*% t(svd_fit$u))
 }

@@ -1,17 +1,16 @@
 filter_params <- function(params, max_pi0 = 0.95) {
   ind <- params$pi0 < max_pi0
-  Omega <- solve(params$Sigma[ind, ind])
   return(list(pi0 = params$pi0[ind],
               mu = params$mu[ind],
               sigma = params$sigma[ind],
-              Omega = solve(params$Sigma[ind, ind]),
+              Omega = threshold_matrix(solve(params$Sigma[ind, ind])),
               Sigma = params$Sigma[ind, ind]))
 }
 
-simulate_a <- function(n, params, k_feature = 2, max_iter = 10, verbose = FALSE) {
+simulate_a <- function(n, params, k_feature = 2, maxit = 10, verbose = FALSE) {
   i_iter <- 0
   while(TRUE) {
-    if(i_iter + 1 > max_iter)
+    if(i_iter + 1 > maxit)
       stop("Can't satisfy conditions!")
     i_iter <- i_iter + 1
     

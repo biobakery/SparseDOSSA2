@@ -4,7 +4,8 @@ dx <- function(x,
                log.p = FALSE) {
   control <- do.call(control_integrate, control)
   
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                              maxit = control$maxit_getLimits)
   
   fit_integrate <- 
     cubature::cubintegrate(vintegrand_dx,
@@ -30,7 +31,7 @@ dx <- function(x,
 control_integrate <- function(limit_max = 50,
                               limit_min = 1e-5,
                               step_size = 2,
-                              max_try = 100,
+                              maxit_getLimits = 10,
                               rel_tol = 1e-05,
                               abs_tol = 0,
                               max_eval = 1e6,
@@ -40,7 +41,7 @@ control_integrate <- function(limit_max = 50,
   list(limit_max = limit_max,
        limit_min = limit_min,
        step_size = step_size,
-       max_try = max_try,
+       maxit_getLimits = maxit_getLimits,
        rel_tol = rel_tol,
        abs_tol = abs_tol,
        max_eval = max_eval,
@@ -100,7 +101,8 @@ ea <- function(x,
                control) {
   control <- do.call(control_integrate, control)
   
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                              maxit = control$maxit_getLimits)
   
   fit_integrate <- 
     cubature::cubintegrate(vintegrand_ea,
@@ -136,7 +138,8 @@ eloga <- function(x,
                   control) {
   control <- do.call(control_integrate, control)
   
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                              maxit = control$maxit_getLimits)
   
   fit_integrate <- 
     cubature::cubintegrate(vintegrand_eloga,
@@ -172,7 +175,8 @@ eloga2 <- function(x,
                    control) {
   control <- do.call(control_integrate, control)
   
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+                              maxit = control$maxit_getLimits)
   
   fit_integrate <- 
     cubature::cubintegrate(vintegrand_eloga2,

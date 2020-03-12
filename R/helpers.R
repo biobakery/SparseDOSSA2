@@ -150,7 +150,7 @@ get_sigmas <- function(x, eloga, eloga2, mu) {
 # }
 
 get_intLimits <- function(x, pi0, mu, sigma, Omega,
-                          n_vals = 10, step_size = 2, max_iter = 20) {
+                          n_vals = 10, step_size = 2, maxit = 10) {
   ind_nonzero <- x != 0
   logx <- log(x[ind_nonzero])
   mat_range <- cbind(mu[ind_nonzero] - logx - sqrt(2000)*sigma[ind_nonzero],
@@ -162,9 +162,9 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega,
     return(c(0, 0)) ## FIXME??
 
   i_iter <- 0
-  while(TRUE) { ## FIXME
-    if(i_iter + 1 > max_iter)
-      stop("Could not find positive values!")
+  while(TRUE) {
+    if(i_iter + 1 > maxit)
+      return(c(0, 0)) ## FIXME??
     i_iter <- i_iter + 1
     
     vlim <- seq(from = range[1], to = range[2], length.out = n_vals)
@@ -296,13 +296,13 @@ make_CVfolds <- function(n, K) {
 
 filter_data <- function(data, 
                         k_feature = 2, k_sample = 1,
-                        max_iter = 3) {
+                        maxit = 3) {
   i_iter <- 0
   ind_feature <- rep(TRUE, ncol(data))
   ind_sample <- rep(TRUE, nrow(data))
   
   while(TRUE) {
-    if (i_iter + 1 > max_iter) 
+    if (i_iter + 1 > maxit) 
       stop("Max iteration reached!")
     i_iter <- i_iter + 1
     
@@ -318,16 +318,17 @@ filter_data <- function(data,
 }
 
 fill_estimates_CV <- function(params_CV, params_full, ind_feature) {
-  params_return <- params_full
-  params_return$Sigma <- 
-    params_return$Omega <- 
-    diag(rep(1, length(ind_feature)))
+  params_return <- params_CV
   
+  params_return[c("pi0", "mu", "sigma")] <- params_full[c("pi0", "mu", "sigma")]
   for(param in c("pi0", "mu", "sigma"))
     params_return[[param]][ind_feature] <- params_CV[[param]]
   
-  for(param in c("Sigma", "Omega"))
-    params_return[[param]][ind_feature, ind_feature] <- params_CV[[param]]
+  params_return$Sigma <- 
+    params_return$Omega <- 
+    diag(rep(1, length(ind_feature)))
+  params_return[["Sigma"]][ind_feature, ind_feature] <- params_CV[["Sigma"]]
+  params_return[["Omega"]][ind_feature, ind_feature] <- threshold_matrix(solve(params_CV[["Sigma"]]))
   
   return(params_return)
 }

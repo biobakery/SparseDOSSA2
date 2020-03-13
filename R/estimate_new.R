@@ -1,5 +1,5 @@
 estimate_featureParam_new <- function(x) {
-  ind_nonzero <- x > 0
+  ind_nonzero <- x > 0 & x < 1
   if(all(ind_nonzero)) ## FIXME
     pi0 <- length(ind_nonzero) / (length(ind_nonzero) + 0.5)
   else

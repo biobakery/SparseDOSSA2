@@ -4,9 +4,9 @@ estimate_featureParam_new <- function(x) {
     pi0 <- length(ind_nonzero) / (length(ind_nonzero) + 0.5)
   else
     pi0 <- mean(!ind_nonzero)
-  mu <- mean(log(x[ind_nonzero]))
+  mu <- mean(log(x[ind_nonzero]) - log(1 - x[ind_nonzero])) ## FIXME
   if(sum(ind_nonzero) > 1)
-    sigma <- sd(log(x[ind_nonzero]))
+    sigma <- sd(log(x[ind_nonzero]) - log(1 - x[ind_nonzero]))
   else
     sigma <- 1 ##FIXME
   

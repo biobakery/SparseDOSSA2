@@ -17,8 +17,8 @@ estimate_featureParam_new <- function(x) {
 
 get_marginals <- function(X) {
   t(vapply(seq_len(ncol(X)),
-           function(i_sample)
+           function(i_feature)
              estimate_featureParam_new(
-               X[, i_sample, drop = TRUE]),
+               X[, i_feature, drop = TRUE]),
            c(0.0, 0.0, 0.0)))
 }

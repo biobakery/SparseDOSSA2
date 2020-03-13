@@ -28,11 +28,12 @@ simulate_a <- function(n, params, k_feature = 2, maxit = 10, verbose = FALSE) {
 }
 
 params_a_to_x <- function(params_a, n = 100000) {
-  samples_a <- rcopulasso(n = n,
+  samples_a <- rcopulasso(n = round(n * 1.5), # FIXME
                           pi0 = params_a$pi0,
                           mu = params_a$mu,
                           sigma = params_a$sigma,
                           Omega = params_a$Omega)
+  samples_a <- samples_a[!apply(samples_a == 0, 1, all), ][1:n, ]
   samples_x <- t(apply(samples_a, 1, function(x) x / sum(x)))
   mat_marginals <- get_marginals(samples_x)
   return(list(pi0 = mat_marginals[, "pi0"],

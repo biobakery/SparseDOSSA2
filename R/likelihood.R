@@ -1,10 +1,11 @@
 dx <- function(x, 
-               pi0, mu, sigma, Omega,
+               pi0, mu, sigma, Omega, Sigma,
                control = list(),
                log.p = FALSE) {
   control <- do.call(control_integrate, control)
   
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+                              Omega = Omega, Sigma = Sigma,
                               maxit = control$maxit_getLimits)
   
   fit_integrate <- 
@@ -13,7 +14,8 @@ dx <- function(x,
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
                            nVec = 2,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+                           Omega = Omega, Sigma = Sigma)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
@@ -51,18 +53,50 @@ control_integrate <- function(limit_max = 50,
 }
 
 dloga <- function(a,
-                  pi0, mu, sigma, Omega, 
+                  pi0, mu, sigma, Omega, Sigma, 
                   log.p = TRUE) {
+  
   u <- a_to_u(a,
               pi0 = pi0, mu = mu, sigma = sigma)
-  g <- u_to_g(u = u, a = a, mu = mu, sigma = sigma) ## FIXME
+  g <- qnorm(u)
   
+  ind_nonzero <- a > 0
   if(any(abs(g) == Inf)) {
     log_d <- -Inf
+  } else if(all(ind_nonzero)) {
+    log_d <- 
+      mvtnorm::dmvnorm(x = g,
+                       mean = rep(0, length(g)),
+                       sigma = Sigma,
+                       log = TRUE) +
+      sum(g^2) / 2 -
+      sum((log(a) - mu)^2 / (sigma)^2 / 2) - 
+      sum(log(sigma)) + 
+      sum(log(1 - pi0))
+  } else if(!any(ind_nonzero)) {
+    log_d <- 
+      log(mvtnorm::pmvnorm(
+        lower = -Inf, 
+        upper = g, 
+        mean = rep(0, length(g)),
+        sigma = Sigma))
   } else {
-    log_d <- du(g, Omega) - 
-      sum((log(a[a > 0]) - mu[a > 0])^2 / (sigma[a > 0])^2 / 2) -
-      log(2 * pi) / 2 * sum(a > 0) - sum(log(sigma[a > 0])) 
+    log_d <- 
+      log(mvtnorm::pmvnorm(
+        lower = -Inf, 
+        upper = g[!ind_nonzero], 
+        mean = (-solve(Omega[!ind_nonzero, !ind_nonzero, drop = FALSE],
+                       Omega[!ind_nonzero, ind_nonzero, drop = FALSE]) %*% 
+                  g[ind_nonzero])[, 1],
+        sigma = solve(Omega[!ind_nonzero, !ind_nonzero, drop = FALSE]))) +
+      mvtnorm::dmvnorm(x = g[ind_nonzero],
+                       mean = rep(0, length = sum(ind_nonzero)),
+                       sigma = Sigma[ind_nonzero, ind_nonzero, drop = FALSE],
+                       log = TRUE) +
+      sum(g[ind_nonzero]^2) / 2 -
+      sum((log(a[ind_nonzero]) - mu[ind_nonzero])^2 / (sigma[ind_nonzero])^2 / 2) - 
+      sum(log(sigma[ind_nonzero])) + 
+      sum(log(1 - pi0[ind_nonzero]))
   }
   
   if(log.p)
@@ -71,37 +105,61 @@ dloga <- function(a,
     return(exp(log_d))
 }
 
-du <- function(g, Omega, log.p = TRUE) {
-  # Without normalizing constant (2pi)^(-2/p)!
-  if(any(g == -Inf | g == Inf)) return(-Inf)
-  log_d <- log_dmvnorm(S = g %*% t(g), Omega = Omega) + sum(g^2)/2 + 
-    log(det(Omega)) / 2
-  
-  if(log.p) 
-    return(log_d)
-  else
-    return(exp(log_d))
-}
-
-log_dmvnorm <- function(S, Omega) {
-  - sum(Omega * S) / 2
-}
+# dloga_old <- function(a,
+#                       pi0, mu, sigma, Omega, 
+#                       log.p = TRUE) {
+#   u <- a_to_u_old(a,
+#                   pi0 = pi0, mu = mu, sigma = sigma)
+#   g <- qnorm(u)
+#   
+#   if(any(abs(g) == Inf)) {
+#     log_d <- -Inf
+#   } else {
+#     log_d <- du(g, Omega) - 
+#       sum((log(a[a > 0]) - mu[a > 0])^2 / (sigma[a > 0])^2 / 2) -
+#       log(2 * pi) / 2 * sum(a > 0) - sum(log(sigma[a > 0])) 
+#   }
+#   
+#   if(log.p)
+#     return(log_d)
+#   else
+#     return(exp(log_d))
+# }
+# 
+# du <- function(g, Omega, log.p = TRUE) {
+#   # Without normalizing constant (2pi)^(-2/p)!
+#   if(any(g == -Inf | g == Inf)) return(-Inf)
+#   log_d <- log_dmvnorm(S = g %*% t(g), Omega = Omega) + sum(g^2)/2 + 
+#     log(det(Omega)) / 2
+#   
+#   if(log.p) 
+#     return(log_d)
+#   else
+#     return(exp(log_d))
+# }
+# 
+# log_dmvnorm <- function(S, Omega) {
+#   - sum(Omega * S) / 2
+# }
 
 integrand_dx <- function(log_asum, x, 
-                         pi0, mu, sigma, Omega) {
+                         pi0, mu, sigma, 
+                         Omega, Sigma) {
   dloga(a = a(x, exp(log_asum)),
-        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+        pi0 = pi0, mu = mu, sigma = sigma, 
+        Omega = Omega, Sigma = Sigma,
         log.p = FALSE)
 }
 
 vintegrand_dx <- Vectorize2(integrand_dx, vectorize.args = "log_asum")
 
 ea <- function(x, 
-               pi0, mu, sigma, Omega,
+               pi0, mu, sigma, Omega, Sigma,
                control) {
   control <- do.call(control_integrate, control)
   
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+                              Omega = Omega, Sigma = Sigma,
                               maxit = control$maxit_getLimits)
   
   fit_integrate <- 
@@ -110,7 +168,8 @@ ea <- function(x,
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
                            nVec = 2,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+                           Omega = Omega, Sigma = Sigma)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
@@ -124,21 +183,25 @@ ea <- function(x,
 }
 
 integrand_ea <- function(log_asum, x, 
-                         pi0, mu, sigma, Omega) {
+                         pi0, mu, sigma, 
+                         Omega, Sigma) {
   exp(dloga(a = a(x, exp(log_asum)),
-            pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
-            log.p = TRUE) + log_asum)
+            pi0 = pi0, mu = mu, sigma = sigma, 
+            Omega = Omega, Sigma = Sigma,
+            log.p = TRUE) + 
+        log_asum)
 }
 
 vintegrand_ea <- Vectorize2(integrand_ea, 
                             vectorize.args = "log_asum")
 
 eloga <- function(x, 
-                  pi0, mu, sigma, Omega,
+                  pi0, mu, sigma, Omega, Sigma,
                   control) {
   control <- do.call(control_integrate, control)
   
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+                              Omega = Omega, Sigma = Sigma,
                               maxit = control$maxit_getLimits)
   
   fit_integrate <- 
@@ -147,7 +210,8 @@ eloga <- function(x,
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
                            nVec = 2,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+                           Omega = Omega, Sigma = Sigma)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
@@ -161,9 +225,11 @@ eloga <- function(x,
 }
 
 integrand_eloga <- function(log_asum, x, 
-                            pi0, mu, sigma, Omega) {
+                            pi0, mu, sigma, 
+                            Omega, Sigma) {
   dloga(a = a(x, exp(log_asum)),
-        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+        pi0 = pi0, mu = mu, sigma = sigma, 
+        Omega = Omega, Sigma = Sigma,
         log.p = FALSE) * log_asum
 }
 
@@ -171,11 +237,12 @@ vintegrand_eloga <- Vectorize2(integrand_eloga,
                                vectorize.args = "log_asum")
 
 eloga2 <- function(x, 
-                   pi0, mu, sigma, Omega,
+                   pi0, mu, sigma, Omega, Sigma,
                    control) {
   control <- do.call(control_integrate, control)
   
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+                              Omega = Omega, Sigma = Sigma,
                               maxit = control$maxit_getLimits)
   
   fit_integrate <- 
@@ -184,7 +251,8 @@ eloga2 <- function(x,
                            relTol = control$rel_tol, absTol = control$abs_tol,
                            method = control$method, maxEval = control$max_eval,
                            nVec = 2,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+                           x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+                           Omega = Omega, Sigma = Sigma)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
@@ -198,9 +266,11 @@ eloga2 <- function(x,
 }
 
 integrand_eloga2 <- function(log_asum, x, 
-                             pi0, mu, sigma, Omega) {
+                             pi0, mu, sigma, 
+                             Omega, Sigma) {
   dloga(a = a(x, exp(log_asum)),
-        pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega,
+        pi0 = pi0, mu = mu, sigma = sigma, 
+        Omega = Omega, Sigma = Sigma,
         log.p = FALSE) * log_asum^2
 }
 

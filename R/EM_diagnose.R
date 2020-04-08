@@ -75,23 +75,23 @@ EM_diagnose <- function(data,
           function(i_sample) {
             i_time <- Sys.time()
             num <- ea(x = data[i_sample, , drop = TRUE],
-                      pi0 = params$pi0, mu = params$mu, 
-                      sigma = params$sigma, Omega = params$Omega,
+                      pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+                      Omega = params$Omega, Sigma = params$Sigma,
                       control = c(control$control_numint, 
                                   list(only_value = FALSE)))
             eloga_num <- eloga(x = data[i_sample, , drop = TRUE],
-                               pi0 = params$pi0, mu = params$mu, 
-                               sigma = params$sigma, Omega = params$Omega,
+                               pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+                               Omega = params$Omega, Sigma = params$Sigma,
                                control = c(control$control_numint, 
                                            list(only_value = FALSE)))
             eloga2_num <- eloga2(x = data[i_sample, , drop = TRUE],
-                                 pi0 = params$pi0, mu = params$mu, 
-                                 sigma = params$sigma, Omega = params$Omega,
+                                 pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+                                 Omega = params$Omega, Sigma = params$Sigma,
                                  control = c(control$control_numint, 
                                              list(only_value = FALSE)))
             denom <- dx(x = data[i_sample, , drop = TRUE],
-                        pi0 = params$pi0, mu = params$mu, 
-                        sigma = params$sigma, Omega = params$Omega,
+                        pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+                        Omega = params$Omega, Sigma = params$Sigma,
                         control = c(control$control_numint, 
                                     list(only_value = FALSE)))
             

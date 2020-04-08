@@ -64,9 +64,8 @@ enforce_corr <- function(x) {
   return(x_out)
 }
 
-
 a_to_u <- function(a, pi0, mu, sigma) {
-  to_return <-  pi0 / 2
+  to_return <-  pi0
   if(any(a > 0)) ##FIXME
     to_return[a > 0] <- 
       pi0[a > 0] + 
@@ -78,9 +77,17 @@ a_to_u <- function(a, pi0, mu, sigma) {
   return(to_return)
 }
 
-u_to_g <- function(u, a, mu, sigma) {
-  g <- qnorm(u)
-  return(g)
+a_to_u_old <- function(a, pi0, mu, sigma) {
+  to_return <-  pi0 / 2
+  if(any(a > 0)) ##FIXME
+    to_return[a > 0] <- 
+      pi0[a > 0] + 
+      pnorm(log(a[a > 0]), 
+            mean = mu[a > 0], 
+            sd = sigma[a > 0]) * 
+      (1 - pi0[a > 0])
+  
+  return(to_return)
 }
 
 a <- function(x, asum) {
@@ -149,7 +156,7 @@ get_sigmas <- function(x, eloga, eloga2, mu) {
 #   return(c(lower, upper))
 # }
 
-get_intLimits <- function(x, pi0, mu, sigma, Omega,
+get_intLimits <- function(x, pi0, mu, sigma, Omega, Sigma,
                           n_vals = 10, step_size = 2, maxit = 10) {
   ind_nonzero <- x != 0
   logx <- log(x[ind_nonzero])
@@ -168,7 +175,9 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega,
     i_iter <- i_iter + 1
     
     vlim <- seq(from = range[1], to = range[2], length.out = n_vals)
-    vval <- vintegrand_dx(log_asum = vlim, x = x, pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
+    vval <- vintegrand_dx(log_asum = vlim, 
+                          x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+                          Omega = Omega, Sigma = Sigma)
     vflag <- vval > 0
     if(vflag[1] | rev(vflag)[1])
       stop("Positive dx values at integration limits!")

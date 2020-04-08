@@ -20,6 +20,15 @@ copulasso <- function(data, lambda,
                                       verbose = FALSE)
       Omega[z, z] <- out.glasso$icov[[1]]
     }
+    if(penalize_method == "huge_conditioned") {
+      S_conditioned <- condition_ridge(S[z, z, drop = FALSE],
+                                lambda = 1e-6,
+                                method = "ridge1")
+      out.glasso <- huge::huge.glasso(x = S_conditioned,
+                                      lambda = lambda,
+                                      verbose = FALSE)
+      Omega[z, z] <- out.glasso$icov[[1]]
+    }
     if(penalize_method == "hugec") {
       out.glasso <- .Call("_huge_hugeglasso",
                           S[z, z, drop = FALSE],
@@ -88,4 +97,14 @@ solve_ridge <- function(S, lambda, method = "ridge1") {
     eigen_inv <- 1 / (svd_fit$d + lambda)
   
   return(svd_fit$u %*% diag(eigen_inv) %*% t(svd_fit$u))
+}
+
+condition_ridge <- function(S, lambda, method = "ridge1") {
+  svd_fit <- svd(S)
+  if(method == "ridge1")
+    eigen_cond <- 1 / ((sqrt(svd_fit$d^2 + 4 * lambda) - svd_fit$d) / 2 / lambda)
+  if(method == "ridge2")
+    eigen_cond <- 1 / (svd_fit$d + lambda)
+  
+  return(svd_fit$u %*% diag(eigen_cond) %*% t(svd_fit$u))
 }

@@ -1,0 +1,123 @@
+---
+title: "Calculating fx"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+knitr::opts_chunk$set(echo=FALSE)
+library(magrittr)
+library(ggplot2)
+```
+
+## Notations
+
+* $G \sim f_G(g | \Omega)$
+
+* $F_{A_j}(A_j) = F_{G_j}(G_j)$
+    
+    * $F_{A_j}(a) = 0$ for $a < 0$, $F_{A_j}(a) = \pi_{0j}$ for $a = 0$, 
+      $f_{\log A_j}(\log a) = (1 - \pi_{0j}) \times 
+       \phi(\log a | \mu_j, \sigma_j)$ for $a > 0$
+  
+* $A_s = \sum A_j$, $X = A / A_s$
+
+* For $A = (A_1, A_2)$, let $A_1$ be all zeros and $A_2$ non-zeros. 
+  $G = (G_1, G_2) = (G_1(A_1), G_2(A_2))$ be the corresponding hidden variables.
+  \begin{aligned}
+    f_X(x) &= \int f_{(X, \log A_s)}(x, \log a_s) d \log a_s \\
+           &= \int f_{A_1, \log A_2}(\log a_2) \times \frac{1}{\prod x_{2j}} 
+              d \log a_s \\
+           &= \int \left[\int_{- \inf}^{F^{-1}_{G_1}(\pi_{01})} 
+                              f_G(g_1, g_2(\log a_2)) \times
+                              \prod \frac{f_{\log A_{2j}}(\log a_{2j})}{f_{G_{2j}}(g_{2j})} 
+                              d g_1\right] 
+              \times \frac{1}{\prod x_{2j}} d \log a_s \\
+           &= \int \left[\int_{- \inf}^{F^{-1}_{G_1}(\pi_{01})} 
+                               f_G(g_1, g_2(\log a_2)) d g_1 \times
+                               \prod \frac{f_{\log A{_2j}}(\log a_{2j})}{f_{G_{2j}}(g_{2j})}
+                         \right] 
+              \times \frac{1}{\prod x_{2j}} d \log a_s
+  \end{aligned}
+  
+    * $\int_{- \inf}^{F^{-1}_{G_1}(\pi_{01})} f_G(g_1, g_2(\log a_2)) d g_1$ can
+      be evaluated via `mvtnorm::pmvnorm`
+    
+    * Previous approach:
+      $\int_{- \inf}^{F^{-1}_{G_1}(\pi_{01})} f_G(g_1, g_2(\log a_2)) d g_1 
+       \propto f_G(g_1^*, g_2(\log a_2))$
+       
+## Unit testing
+
+  * Want to ensure that new implementation is correct (generates proper density)
+  
+  * Validate this by checking that 
+    $\int \left[\int_{- \inf}^{F^{-1}_{G_1}(\pi_{01})} 
+                               f_G(g_1, g_2(\log a_2)) d g_1 \times
+                               \prod \frac{f_{\log A_{2j}}(\log a_{2j})}{f_{G_{2j}}(g_{2j})}
+                         \right] d \log a_2 = F_{G_1}(F^{-1}_{G_1}(\pi_{01}))$ 
+  * $p = 4$, $\pi_0 = 1/2$, $\mu, \sigma$ standard normal, 
+    $\sigma_{i, j} = 0.3$.
+
+```{r unit testing, cache=TRUE}
+smar::sourceDir("SparseDOSSA2/R/")
+Sigma <- matrix(0.3, nrow = 4, ncol = 4)
+diag(Sigma) <- rep(1, 4)
+Omega <- solve(Sigma)
+
+tmpfun1 <- function(a, pi0, mu, sigma, Omega, Sigma) {
+  dloga(a, pi0, mu, sigma, Omega, Sigma, log.p = FALSE) /
+    prod(a[a > 0])
+}
+
+val1 <- cubature::hcubature(tmpfun1,
+                            lowerLimit = c(0.00001, 0.00001, 0.00001, 0.00001),
+                            upperLimit = c(100, 100, 100, 100),
+                            pi0 = c(0.5, 0.5, 0.5, 0.5),
+                            mu = c(0, 0, 0, 0),
+                            sigma = c(1, 1, 1, 1),
+                            Omega = Omega,
+                            Sigma = Sigma,
+                            tol = 1e-2)
+val1$integral
+mvtnorm::pmvnorm(lower = c(0, 0, 0, 0),
+                 upper = c(Inf, Inf, Inf, Inf),
+                 sigma = Sigma)
+
+tmpfun2 <- function(a, pi0, mu, sigma, Omega, Sigma) {
+  dloga(c(0, a), pi0, mu, sigma, Omega, Sigma, log.p = FALSE) /
+    prod(a[a > 0])
+}
+
+val2 <- cubature::hcubature(tmpfun2,
+                            lowerLimit = c(0.000001, 0.000001, 0.000001),
+                            upperLimit = c(100, 100, 100),
+                            pi0 = c(0.5, 0.5, 0.5, 0.5),
+                            mu = c(0, 0, 0, 0),
+                            sigma = c(1, 1, 1, 1),
+                            Omega = Omega,
+                            Sigma = Sigma,
+                            tol = 1e-2)
+val2$integral
+mvtnorm::pmvnorm(lower = c(0, 0, 0, -Inf),
+                 upper = c(Inf, Inf, Inf, 0),
+                 sigma = Sigma)
+```
+
+## Faster computation?
+
+$f_G(g_1, g_2(\log a_2)) \times
+\prod \frac{f_{\log A_{2j}}(\log a_{2j})}{f_{G_{2j}}(g_{2j})}$
+simplifies to a normal likelihood when $g_2(\log a_2)$ is linear in $\log a_2$.
+```{r visualize g function}
+logas <- seq(-5, 5, by = 0.01)
+gs <- qnorm(0.5 + 0.5 * pnorm(logas))
+plot(logas, gs)
+```
+
+## Compare old and new approach
+
+```{r comparison}
+x1 <- exp(seq(-2, -0.1, by = 0.2))
+x_rest <- sapply(x1, function(x) (1 - x) * c(0.5, 0.5, 0))
+```

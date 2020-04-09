@@ -59,65 +59,112 @@ library(ggplot2)
   * $p = 4$, $\pi_0 = 1/2$, $\mu, \sigma$ standard normal, 
     $\sigma_{i, j} = 0.3$.
 
-```{r unit testing, cache=TRUE}
+```{r evaluate for real data}
 smar::sourceDir("SparseDOSSA2/R/")
-Sigma <- matrix(0.3, nrow = 4, ncol = 4)
-diag(Sigma) <- rep(1, 4)
-Omega <- solve(Sigma)
+load("results/Simulation_smaller/tb_job.RData")
+i_tb_job <- tb_job %>% 
+  dplyr::filter(dataset == "stool") %>% 
+  dplyr::slice(1)
+params_subset <- sapply(
+  i_tb_job$params[[1]]$mu,
+  function(i_mu) {
+    i_mu %in% i_tb_job$params_sim[[1]]$mu
+  }
+)
 
-tmpfun1 <- function(a, pi0, mu, sigma, Omega, Sigma) {
-  dloga(a, pi0, mu, sigma, Omega, Sigma, log.p = FALSE) /
-    prod(a[a > 0])
-}
+params <- i_tb_job$params_sim[[1]]
+x_samples <- i_tb_job$x_samples[[1]][1:5, ]
+a_samples <- i_tb_job$a_samples[[1]][1:5, ]
 
-val1 <- cubature::hcubature(tmpfun1,
-                            lowerLimit = c(0.00001, 0.00001, 0.00001, 0.00001),
-                            upperLimit = c(100, 100, 100, 100),
-                            pi0 = c(0.5, 0.5, 0.5, 0.5),
-                            mu = c(0, 0, 0, 0),
-                            sigma = c(1, 1, 1, 1),
-                            Omega = Omega,
-                            Sigma = Sigma,
-                            tol = 1e-2)
-val1$integral
-mvtnorm::pmvnorm(lower = c(0, 0, 0, 0),
-                 upper = c(Inf, Inf, Inf, Inf),
-                 sigma = Sigma)
+log_asums <- seq(-5, 5, by = 0.5)
+# compare dloga, fixing parameters
+d1s <- sapply(1:nrow(x_samples),
+              function(i_sample) {
+                sapply(log_asums, function(i_logasum)
+                  dloga(a = a(x = x_samples[i_sample, ],
+                              asum = exp(i_logasum)),
+                        pi0 = params$pi0, 
+                        mu = params$mu,
+                        sigma = params$sigma,
+                        Sigma = params$Sigma,
+                        Omega = params$Omega)) 
+              })
+d2s <- sapply(1:nrow(x_samples),
+              function(i_sample) {
+                sapply(log_asums, function(i_logasum)
+                  dloga_old(a = a(x = x_samples[i_sample, ],
+                                  asum = exp(i_logasum)),
+                            pi0 = params$pi0, 
+                            mu = params$mu,
+                            sigma = params$sigma,
+                            Omega = params$Omega))
+              })
+colnames(d1s) <- colnames(d2s) <- paste0("Sample", 1:5)
+rbind(data.frame(log_asum = log_asums,
+                 d1s,
+                 method = "Original"),
+      data.frame(log_asum = log_asums,
+                 d2s,
+                 method = "Approximate")) %>% 
+  tidyr::pivot_longer(cols = Sample1:Sample5,
+                      names_to = "Sample",
+                      values_to = "logLik") %>% 
+  ggplot(aes(x = log_asum,
+             y = logLik,
+             color = method)) +
+  geom_point() +
+  geom_line() +
+  facet_grid(.~Sample)
 
-tmpfun2 <- function(a, pi0, mu, sigma, Omega, Sigma) {
-  dloga(c(0, a), pi0, mu, sigma, Omega, Sigma, log.p = FALSE) /
-    prod(a[a > 0])
-}
 
-val2 <- cubature::hcubature(tmpfun2,
-                            lowerLimit = c(0.000001, 0.000001, 0.000001),
-                            upperLimit = c(100, 100, 100),
-                            pi0 = c(0.5, 0.5, 0.5, 0.5),
-                            mu = c(0, 0, 0, 0),
-                            sigma = c(1, 1, 1, 1),
-                            Omega = Omega,
-                            Sigma = Sigma,
-                            tol = 1e-2)
-val2$integral
-mvtnorm::pmvnorm(lower = c(0, 0, 0, -Inf),
-                 upper = c(Inf, Inf, Inf, 0),
-                 sigma = Sigma)
-```
+# compare dloga, fixing as
+load("results/Stool_vaginal/tb_job.RData")
+tb_params <- tb_job %>% 
+  dplyr::filter(penalize_method == "huge",
+                dataset == "stool",
+                lambdas > 1e-2)
+l_params <- tb_params$i_job %>% 
+  purrr::map(~ {
+    load(paste0("results/Stool_vaginal/fit_", .x, ".RData"))
+    fit_EM$l_fits_full[[1]]$fit
+  })
+d1s_params <- sapply(1:nrow(a_samples),
+                     function(i_sample) {
+                       sapply(l_params, function(i_params)
+                         dloga(a = a_samples[i_sample, ],
+                               pi0 = params$pi0, 
+                               mu = params$mu,
+                               sigma = params$sigma,
+                               Sigma = i_params$Sigma[params_subset, 
+                                                      params_subset],
+                               Omega = solve(i_params$Sigma[params_subset, 
+                                                            params_subset]))) 
+                     })
+d2s_params <- sapply(1:nrow(a_samples),
+                     function(i_sample) {
+                       sapply(l_params, function(i_params)
+                         dloga_old(a = a_samples[i_sample, ],
+                                   pi0 = params$pi0, 
+                                   mu = params$mu,
+                                   sigma = params$sigma,
+                                   Omega = solve(i_params$Sigma[params_subset, 
+                                                                params_subset])))
+                     })
 
-## Faster computation?
-
-$f_G(g_1, g_2(\log a_2)) \times
-\prod \frac{f_{\log A_{2j}}(\log a_{2j})}{f_{G_{2j}}(g_{2j})}$
-simplifies to a normal likelihood when $g_2(\log a_2)$ is linear in $\log a_2$.
-```{r visualize g function}
-logas <- seq(-5, 5, by = 0.01)
-gs <- qnorm(0.5 + 0.5 * pnorm(logas))
-plot(logas, gs)
-```
-
-## Compare old and new approach
-
-```{r comparison}
-x1 <- exp(seq(-2, -0.1, by = 0.2))
-x_rest <- sapply(x1, function(x) (1 - x) * c(0.5, 0.5, 0))
+colnames(d1s_params) <- colnames(d2s_params) <- paste0("Sample", 1:5)
+rbind(data.frame(lambdas = tb_params$lambdas,
+                 d1s_params,
+                 method = "Original"),
+      data.frame(lambdas = tb_params$lambdas,
+                 d2s_params,
+                 method = "Approximate")) %>% 
+  tidyr::pivot_longer(cols = Sample1:Sample5,
+                      names_to = "Sample",
+                      values_to = "logLik") %>% 
+  ggplot(aes(x = log10(lambdas),
+             y = logLik,
+             color = method)) +
+  geom_point() +
+  geom_line() +
+  facet_grid(.~Sample)
 ```

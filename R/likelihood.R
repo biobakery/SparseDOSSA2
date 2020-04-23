@@ -3,19 +3,24 @@ dx <- function(x,
                control = list(),
                log.p = FALSE) {
   control <- do.call(control_integrate, control)
-  
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, 
-                              Omega = Omega, Sigma = Sigma,
-                              maxit = control$maxit_getLimits)
+  if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
+    limits <- get_intLimits2(x = x,
+                             pi0 = pi0, mu = mu, sigma = sigma, 
+                             Omega = Omega, Sigma = Sigma,
+                             control = control)
+    control$lower_loga <- limits[1]
+    control$upper_loga <- limits[2]
+  }
   
   fit_integrate <- 
-    cubature::cubintegrate(vintegrand_dx,
-                           lower = int_limits[1], upper = int_limits[2], 
-                           relTol = control$rel_tol, absTol = control$abs_tol,
-                           method = control$method, maxEval = control$max_eval,
-                           nVec = 2,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, 
-                           Omega = Omega, Sigma = Sigma)
+    integrate2(vintegrand_dx,
+               lower = control$lower_loga, upper = control$upper_loga, 
+               rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
+               max_eval = control$max_eval,
+               method = control$method, 
+               offset = control$offset,
+               x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+               Omega = Omega, Sigma = Sigma)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
@@ -30,26 +35,160 @@ dx <- function(x,
     return(fit_integrate)
 }
 
-control_integrate <- function(limit_max = 50,
-                              limit_min = 1e-5,
-                              step_size = 2,
-                              maxit_getLimits = 10,
-                              rel_tol = 1e-05,
+control_integrate <- function(rel_tol = 1e-2,
                               abs_tol = 0,
-                              max_eval = 1e6,
-                              method = "hcubature",
+                              max_eval = 30,
+                              method = "pcubature",
+                              step_size_limits = 2, 
+                              n_vals_limits = 10,
+                              maxit_limits = 4,
+                              limit_tol = 1e-5,
+                              offset = FALSE, 
+                              lower_loga = NULL,
+                              upper_loga = NULL,
                               jacobian = FALSE,
                               only_value = TRUE) {
-  list(limit_max = limit_max,
-       limit_min = limit_min,
-       step_size = step_size,
-       maxit_getLimits = maxit_getLimits,
+  list(lower_loga = lower_loga,
+       upper_loga = upper_loga,
        rel_tol = rel_tol,
+       limit_tol = limit_tol,
        abs_tol = abs_tol,
        max_eval = max_eval,
        method = method,
+       offset = offset,
        jacobian = jacobian,
-       only_value = only_value)
+       only_value = only_value,
+       n_vals_limits = n_vals_limits,
+       step_size_limits = step_size_limits, 
+       maxit_limits = maxit_limits)
+}
+
+ploga <- function(a, 
+                  pi0, mu, sigma, Sigma,
+                  log.p = TRUE) {
+  ind_zero <- a == 0
+  
+  if(!any(ind_zero)) {
+    log_p <- 1
+  } else {
+    a <- a[ind_zero]
+    pi0 <- pi0[ind_zero]
+    mu <- mu[ind_zero]
+    sigma <- sigma[ind_zero]
+    Sigma <- Sigma[ind_zero, ind_zero, drop = FALSE]
+    
+    u <- a_to_u(a,
+                pi0 = pi0, mu = mu, sigma = sigma)
+    g <- qnorm(u)
+    log_p <- 
+      log(mvtnorm::pmvnorm(
+        lower = -Inf, 
+        upper = g, 
+        mean = rep(0, length(g)),
+        sigma = Sigma))
+  }
+  
+  if(log.p)
+    return(log_p)
+  else
+    return(exp(log_p))
+}
+
+mloga <- function(a, 
+                  pi0, mu, sigma, Sigma,
+                  doComputeVariance = FALSE,
+                  log_ploga = 0) {
+  ind_zero <- a == 0
+  
+  if(!any(ind_zero)) {
+    return(list(mean_cond = NULL,
+                Sigma_cond = matrix(nrow = 0, ncol = 0)))
+  } else {
+    a <- a[ind_zero]
+    pi0 <- pi0[ind_zero]
+    mu <- mu[ind_zero]
+    sigma <- sigma[ind_zero]
+    Sigma <- Sigma[ind_zero, ind_zero, drop = FALSE]
+    
+    u <- a_to_u(a,
+                pi0 = pi0, mu = mu, sigma = sigma)
+    g <- qnorm(u)
+    m_cond <- 
+      tmvtnorm::mtmvnorm(sigma = Sigma,
+                         upper = g,
+                         doComputeVariance = doComputeVariance)
+  }
+  
+  return(list(mean_cond = m_cond$tmean,
+              Sigma_cond = m_cond$tvar))
+}
+
+dloga_forInt <- function(a,
+                         pi0, mu, sigma, Omega, Sigma, 
+                         log_ploga = 0,
+                         mean_cond,
+                         Sigma_cond = NA,
+                         mean_cond_choice = "half",
+                         Sigma_cond_choice = "cond",
+                         log.p = TRUE) {
+  
+  u <- a_to_u(a,
+              pi0 = pi0, mu = mu, sigma = sigma,
+              half_pi0 = TRUE)
+  g <- qnorm(u)
+  
+  ind_nonzero <- a > 0
+  if(any(abs(g) == Inf)) {
+    log_d <- -Inf
+  } else if(all(ind_nonzero)) {
+    log_d <- 
+      mvtnorm::dmvnorm(x = g,
+                       mean = rep(0, length(g)),
+                       sigma = Sigma,
+                       log = TRUE) +
+      sum(g^2) / 2 -
+      sum((log(a) - mu)^2 / (sigma)^2 / 2) - 
+      sum(log(sigma)) + 
+      sum(log(1 - pi0))
+  } else if(!any(ind_nonzero)) {
+    log_d <- 
+      log_ploga
+  } else {
+    if(mean_cond_choice == "half")
+      mean_zero <- g[!ind_nonzero]
+    else
+      mean_zero <- mean_cond
+    if(Sigma_cond_choice == "cond")
+      Sigma_nonzero <- solve(Omega[ind_nonzero, ind_nonzero, drop = FALSE])
+    else if (Sigma_cond_choice == "full")
+      Sigma_nonzero <- Sigma[ind_nonzero, ind_nonzero, drop = FALSE]
+    else
+      Sigma_nonzero <- solve(Omega[ind_nonzero, ind_nonzero, drop = FALSE]) +
+        Sigma[ind_nonzero, !ind_nonzero, drop = FALSE] %*%
+        solve(Sigma[!ind_nonzero, !ind_nonzero, drop = FALSE]) %*%
+        Sigma_cond %*%
+        solve(Sigma[!ind_nonzero, !ind_nonzero, drop = FALSE]) %*%
+        Sigma[!ind_nonzero, ind_nonzero, drop = FALSE]
+    log_d <- 
+      log_ploga +
+      mvtnorm::dmvnorm(
+        x = g[ind_nonzero],
+        mean = (Sigma[ind_nonzero, !ind_nonzero, drop = FALSE] %*%
+                  solve(Sigma[!ind_nonzero, !ind_nonzero, drop = FALSE],
+                        mean_zero))[, 1],
+        sigma = Sigma_nonzero,
+        log = TRUE) +
+      sum(g[ind_nonzero]^2) / 2 -
+      sum((log(a[ind_nonzero]) - mu[ind_nonzero])^2 / 
+            (sigma[ind_nonzero])^2 / 2) - 
+      sum(log(sigma[ind_nonzero])) + 
+      sum(log(1 - pi0[ind_nonzero]))
+  }
+  
+  if(log.p)
+    return(log_d)
+  else
+    return(exp(log_d))
 }
 
 dloga <- function(a,
@@ -94,7 +233,8 @@ dloga <- function(a,
                        sigma = Sigma[ind_nonzero, ind_nonzero, drop = FALSE],
                        log = TRUE) +
       sum(g[ind_nonzero]^2) / 2 -
-      sum((log(a[ind_nonzero]) - mu[ind_nonzero])^2 / (sigma[ind_nonzero])^2 / 2) - 
+      sum((log(a[ind_nonzero]) - mu[ind_nonzero])^2 / 
+            (sigma[ind_nonzero])^2 / 2) - 
       sum(log(sigma[ind_nonzero])) + 
       sum(log(1 - pi0[ind_nonzero]))
   }
@@ -105,42 +245,42 @@ dloga <- function(a,
     return(exp(log_d))
 }
 
-# dloga_old <- function(a,
-#                       pi0, mu, sigma, Omega, 
-#                       log.p = TRUE) {
-#   u <- a_to_u_old(a,
-#                   pi0 = pi0, mu = mu, sigma = sigma)
-#   g <- qnorm(u)
-#   
-#   if(any(abs(g) == Inf)) {
-#     log_d <- -Inf
-#   } else {
-#     log_d <- du(g, Omega) - 
-#       sum((log(a[a > 0]) - mu[a > 0])^2 / (sigma[a > 0])^2 / 2) -
-#       log(2 * pi) / 2 * sum(a > 0) - sum(log(sigma[a > 0])) 
-#   }
-#   
-#   if(log.p)
-#     return(log_d)
-#   else
-#     return(exp(log_d))
-# }
-# 
-# du <- function(g, Omega, log.p = TRUE) {
-#   # Without normalizing constant (2pi)^(-2/p)!
-#   if(any(g == -Inf | g == Inf)) return(-Inf)
-#   log_d <- log_dmvnorm(S = g %*% t(g), Omega = Omega) + sum(g^2)/2 + 
-#     log(det(Omega)) / 2
-#   
-#   if(log.p) 
-#     return(log_d)
-#   else
-#     return(exp(log_d))
-# }
-# 
-# log_dmvnorm <- function(S, Omega) {
-#   - sum(Omega * S) / 2
-# }
+dloga_old <- function(a,
+                      pi0, mu, sigma, Omega,
+                      log.p = TRUE) {
+  u <- a_to_u_old(a,
+                  pi0 = pi0, mu = mu, sigma = sigma)
+  g <- qnorm(u)
+
+  if(any(abs(g) == Inf)) {
+    log_d <- -Inf
+  } else {
+    log_d <- du(g, Omega) -
+      sum((log(a[a > 0]) - mu[a > 0])^2 / (sigma[a > 0])^2 / 2) -
+      log(2 * pi) / 2 * sum(a > 0) - sum(log(sigma[a > 0]))
+  }
+
+  if(log.p)
+    return(log_d)
+  else
+    return(exp(log_d))
+}
+
+du <- function(g, Omega, log.p = TRUE) {
+  # Without normalizing constant (2pi)^(-2/p)!
+  if(any(g == -Inf | g == Inf)) return(-Inf)
+  log_d <- log_dmvnorm(S = g %*% t(g), Omega = Omega) + sum(g^2)/2 +
+    log(det(Omega)) / 2
+
+  if(log.p)
+    return(log_d)
+  else
+    return(exp(log_d))
+}
+
+log_dmvnorm <- function(S, Omega) {
+  - sum(Omega * S) / 2
+}
 
 integrand_dx <- function(log_asum, x, 
                          pi0, mu, sigma, 
@@ -155,21 +295,26 @@ vintegrand_dx <- Vectorize2(integrand_dx, vectorize.args = "log_asum")
 
 ea <- function(x, 
                pi0, mu, sigma, Omega, Sigma,
-               control) {
+               control = list()) {
   control <- do.call(control_integrate, control)
-  
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, 
-                              Omega = Omega, Sigma = Sigma,
-                              maxit = control$maxit_getLimits)
+  if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
+    limits <- get_intLimits2(x = x,
+                             pi0 = pi0, mu = mu, sigma = sigma, 
+                             Omega = Omega, Sigma = Sigma,
+                             control = control)
+    control$lower_loga <- limits[1]
+    control$upper_loga <- limits[2]
+  }
   
   fit_integrate <- 
-    cubature::cubintegrate(vintegrand_ea,
-                           lower = int_limits[1], upper = int_limits[2], 
-                           relTol = control$rel_tol, absTol = control$abs_tol,
-                           method = control$method, maxEval = control$max_eval,
-                           nVec = 2,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, 
-                           Omega = Omega, Sigma = Sigma)
+    integrate2(vintegrand_ea,
+               lower = control$lower_loga, upper = control$upper_loga, 
+               rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
+               max_eval = control$max_eval,
+               method = control$method, 
+               offset = control$offset,
+               x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+               Omega = Omega, Sigma = Sigma)
   
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
@@ -197,22 +342,27 @@ vintegrand_ea <- Vectorize2(integrand_ea,
 
 eloga <- function(x, 
                   pi0, mu, sigma, Omega, Sigma,
-                  control) {
+                  control = list()) {
   control <- do.call(control_integrate, control)
-  
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, 
-                              Omega = Omega, Sigma = Sigma,
-                              maxit = control$maxit_getLimits)
+  if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
+    limits <- get_intLimits2(x = x,
+                             pi0 = pi0, mu = mu, sigma = sigma, 
+                             Omega = Omega, Sigma = Sigma,
+                             control = control)
+    control$lower_loga <- limits[1]
+    control$upper_loga <- limits[2]
+  }
   
   fit_integrate <- 
-    cubature::cubintegrate(vintegrand_eloga,
-                           lower = int_limits[1], upper = int_limits[2], 
-                           relTol = control$rel_tol, absTol = control$abs_tol,
-                           method = control$method, maxEval = control$max_eval,
-                           nVec = 2,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, 
-                           Omega = Omega, Sigma = Sigma)
-  
+    integrate2(vintegrand_eloga,
+               lower = control$lower_loga, upper = control$upper_loga, 
+               rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
+               max_eval = control$max_eval,
+               method = control$method, 
+               offset = control$offset,
+               x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+               Omega = Omega, Sigma = Sigma)
+ 
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
     fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
@@ -238,22 +388,27 @@ vintegrand_eloga <- Vectorize2(integrand_eloga,
 
 eloga2 <- function(x, 
                    pi0, mu, sigma, Omega, Sigma,
-                   control) {
+                   control = list()) {
   control <- do.call(control_integrate, control)
-  
-  int_limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma, 
-                              Omega = Omega, Sigma = Sigma,
-                              maxit = control$maxit_getLimits)
+  if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
+    limits <- get_intLimits2(x = x,
+                             pi0 = pi0, mu = mu, sigma = sigma, 
+                             Omega = Omega, Sigma = Sigma,
+                             control = control)
+    control$lower_loga <- limits[1]
+    control$upper_loga <- limits[2]
+  }
   
   fit_integrate <- 
-    cubature::cubintegrate(vintegrand_eloga2,
-                           lower = int_limits[1], upper = int_limits[2], 
-                           relTol = control$rel_tol, absTol = control$abs_tol,
-                           method = control$method, maxEval = control$max_eval,
-                           nVec = 2,
-                           x = x, pi0 = pi0, mu = mu, sigma = sigma, 
-                           Omega = Omega, Sigma = Sigma)
-  
+    integrate2(vintegrand_eloga2,
+               lower = control$lower_loga, upper = control$upper_loga, 
+               rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
+               max_eval = control$max_eval,
+               method = control$method, 
+               offset = control$offset,
+               x = x, pi0 = pi0, mu = mu, sigma = sigma, 
+               Omega = Omega, Sigma = Sigma)
+ 
   if(control$jacobian) {
     fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
     fit_integrate$error <- fit_integrate$error / prod(x[x > 0])

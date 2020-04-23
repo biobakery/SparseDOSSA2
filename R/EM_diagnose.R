@@ -32,22 +32,23 @@ EM_diagnose <- function(data,
     l_fits[[i_lambda]] <- future::future({
       
       # Initialize using relative abundances
-      fit_copulasso <- copulasso(data = data, 
-                                 lambda = lambda,
-                                 penalize_method = control$penalize_method,
-                                 threshold_zero = control$threshold_zero,
-                                 debug_file = paste0(control$debug_dir,
-                                                     "debug_glasso_lambda_", i_lambda,
-                                                     ".RData")) ## FIXME
-      params <- list(pi0 = fit_marginals[, 1],
-                     mu = fit_marginals[,2],
-                     sigma = fit_marginals[, 3],
-                     Sigma = threshold_matrix(solve(fit_copulasso$Omega),
-                                              threshold_zero = control$threshold_zero),
-                     Omega = fit_copulasso$Omega,
-                     diff = rep(NA_real_, 4),
-                     logLik = NA_real_,
-                     time = Sys.time())
+      fit_copulasso <- copulasso(
+        data = data, 
+        lambda = lambda,
+        penalize_method = control$penalize_method,
+        threshold_zero = control$threshold_zero,
+        debug_file = paste0(control$debug_dir,
+                            "debug_glasso_lambda_", i_lambda, ".RData")) ## FIXME
+      params <- list(
+        pi0 = fit_marginals[, 1],
+        mu = fit_marginals[,2],
+        sigma = fit_marginals[, 3],
+        Sigma = threshold_matrix(solve(fit_copulasso$Omega),
+                                 threshold_zero = control$threshold_zero),
+        Omega = fit_copulasso$Omega,
+        diff = rep(NA_real_, 4),
+        logLik = NA_real_,
+        time = Sys.time())
       
       i_iter <- 0
       converge <- FALSE
@@ -60,11 +61,9 @@ EM_diagnose <- function(data,
                                        n_iter = i_iter)))
       }
         
-      
       ll_easums <- list()
       ll_params <- list()
       while(TRUE) {
-        if(control$verbose) message("EM iteration ", i_iter + 1)
         i_iter <- i_iter + 1
         if(control$verbose)
           message("EM iteration ", i_iter)
@@ -74,26 +73,36 @@ EM_diagnose <- function(data,
           seq_len(nrow(data)),
           function(i_sample) {
             i_time <- Sys.time()
-            num <- ea(x = data[i_sample, , drop = TRUE],
-                      pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
-                      Omega = params$Omega, Sigma = params$Sigma,
-                      control = c(control$control_numint, 
-                                  list(only_value = FALSE)))
-            eloga_num <- eloga(x = data[i_sample, , drop = TRUE],
-                               pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
-                               Omega = params$Omega, Sigma = params$Sigma,
-                               control = c(control$control_numint, 
-                                           list(only_value = FALSE)))
-            eloga2_num <- eloga2(x = data[i_sample, , drop = TRUE],
-                                 pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
-                                 Omega = params$Omega, Sigma = params$Sigma,
-                                 control = c(control$control_numint, 
-                                             list(only_value = FALSE)))
-            denom <- dx(x = data[i_sample, , drop = TRUE],
-                        pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
-                        Omega = params$Omega, Sigma = params$Sigma,
-                        control = c(control$control_numint, 
-                                    list(only_value = FALSE)))
+            
+            limits <- get_intLimits2(
+              x = data[i_sample, , drop = TRUE],
+              pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+              Omega = params$Omega, Sigma = params$Sigma,
+              control = control$control_numint)
+            control_numint <- c(lower_loga = limits[1],
+                                upper_loga = limits[2],
+                                control$control_numint,
+                                only_value = FALSE)
+            num <- 
+              ea(x = data[i_sample, , drop = TRUE],
+                 pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+                 Omega = params$Omega, Sigma = params$Sigma,
+                 control = control_numint)
+            eloga_num <- 
+              eloga(x = data[i_sample, , drop = TRUE],
+                    pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+                    Omega = params$Omega, Sigma = params$Sigma,
+                    control = control_numint)
+            eloga2_num <- 
+              eloga2(x = data[i_sample, , drop = TRUE],
+                     pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+                     Omega = params$Omega, Sigma = params$Sigma,
+                     control = control_numint)
+            denom <- 
+              dx(x = data[i_sample, , drop = TRUE],
+                 pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+                 Omega = params$Omega, Sigma = params$Sigma,
+                 control = control_numint)
             
             return(c("mean" = num$integral / denom$integral,
                      "error" = abs(num$error / denom$integral) + 
@@ -134,22 +143,25 @@ EM_diagnose <- function(data,
           converge_code <- 4
           break
         }
-        params_new <- list(pi0 = fit_marginals[, 1],
-                           mu = fit_marginals[, 2],
-                           sigma = fit_sigmas,
-                           Sigma = threshold_matrix(solve(fit_copulasso$Omega),
-                                                    threshold_zero = control$threshold_zero),
-                           Omega = fit_copulasso$Omega)
-        diff_abs <- vapply(c("sigma", "Sigma"), 
-                           function(i_param)
-                             get_diff(params_new[[i_param]], params[[i_param]], 
-                                      denom_c = control$abs_tol, method = "abs"),
-                           0.0)
-        diff_rel <- vapply(c("sigma", "Sigma"), 
-                           function(i_param)
-                             get_diff(params_new[[i_param]], params[[i_param]], 
-                                      denom_c = control$abs_tol, method = "rel"),
-                           0.0)
+        params_new <- list(
+          pi0 = fit_marginals[, 1],
+          mu = fit_marginals[, 2],
+          sigma = fit_sigmas,
+          Sigma = threshold_matrix(solve(fit_copulasso$Omega),
+                                   threshold_zero = control$threshold_zero),
+          Omega = fit_copulasso$Omega)
+        diff_abs <- vapply(
+          c("sigma", "Sigma"), 
+          function(i_param)
+            get_diff(params_new[[i_param]], params[[i_param]], 
+                     denom_c = control$abs_tol, method = "abs"),
+          0.0)
+        diff_rel <- vapply(
+          c("sigma", "Sigma"), 
+          function(i_param)
+            get_diff(params_new[[i_param]], params[[i_param]], 
+                     denom_c = control$abs_tol, method = "rel"),
+          0.0)
         params <- c(params_new,
                     list(diff = c(diff_abs, diff_rel),
                          logLik = mean(e_asums[, 3]),
@@ -157,9 +169,12 @@ EM_diagnose <- function(data,
         ll_params[[i_iter]] <- params
         
         if(!is.null(control$debug_dir)) {
-          l_debug <- list(ll_easums = ll_easums, ll_params = ll_params, l_filtering = l_filtering)
+          l_debug <- list(ll_easums = ll_easums, 
+                          ll_params = ll_params, 
+                          l_filtering = l_filtering)
           save(l_debug,
-               file = paste0(control$debug_dir,"debug_lambda_", i_lambda, ".RData"))
+               file = paste0(control$debug_dir,
+                             "debug_lambda_", i_lambda, ".RData"))
         }
         
         if(max(diff_abs) < control$abs_tol & max(diff_rel) < control$rel_tol) {
@@ -240,9 +255,10 @@ EM_diagnose_CV <- function(data,
       
       # Fill in parameters estimates for features not present in training data
       for(i_lambda in seq_along(lambdas))
-        result_k$l_fits[[i_lambda]]$fit <- fill_estimates_CV(result_k$l_fits[[i_lambda]]$fit,
-                                                             l_fits_full[[i_lambda]]$fit,
-                                                             result_k$l_filtering$ind_feature)
+        result_k$l_fits[[i_lambda]]$fit <- 
+        fill_estimates_CV(result_k$l_fits[[i_lambda]]$fit,
+                          l_fits_full[[i_lambda]]$fit,
+                          result_k$l_filtering$ind_feature)
       
       # Calculate ll in testing data
       l_logLik <- future.apply::future_lapply(
@@ -287,7 +303,7 @@ control_EM <- function(maxit = 100,
                        rel_tol = 1e-3,
                        abs_tol = 1e-2,
                        control_numint = list(),
-                       penalize_method = "huge",
+                       penalize_method = "huge_conditioned",
                        threshold_zero = 1e-16,
                        verbose = FALSE,
                        debug_dir = NULL) {

@@ -37,7 +37,7 @@ dx <- function(x,
 
 control_integrate <- function(rel_tol = 1e-2,
                               abs_tol = 0,
-                              max_eval = 30,
+                              max_eval = 50,
                               method = "pcubature",
                               step_size_limits = 2, 
                               n_vals_limits = 10,
@@ -431,6 +431,125 @@ integrand_eloga2 <- function(log_asum, x,
 
 vintegrand_eloga2 <- Vectorize2(integrand_eloga2, 
                                 vectorize.args = "log_asum")
+
+get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
+                   control) {
+  time_start <- Sys.time()
+  control <- do.call(control_integrate, control)
+  
+  limits <- get_intLimits(
+    x = x,
+    pi0 = pi0, mu = mu, sigma = sigma, 
+    Omega = Omega, Sigma = Sigma,
+    n_vals = round(control$n_vals_limits / 2), 
+    step_size = control$step_size_limits, 
+    maxit = control$maxit_limits)
+  # 
+  # limits <- get_intLimits(
+  #   x = data[i_sample, , drop = TRUE],
+  #   pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+  #   Omega = params$Omega, Sigma = params$Sigma,
+  #   control = control)
+  # control <- do.call(control_integrate, control)
+  
+  neval <- 2
+  knots_spline <- c(limits[1], limits[2])
+  vals_spline <- vintegrand_dx(knots_spline, 
+                               pi0 = pi0, x = x, mu = mu, sigma = sigma,
+                               Omega = Omega, Sigma = Sigma)
+  errors_spline <- Inf
+  
+  # find knots using dx
+  verrors <- c()
+  while(TRUE) {
+    i_max_error <- which(errors_spline == max(errors_spline))[1]
+    knots_spline <- c(knots_spline[seq(1, i_max_error)],
+                      mean(knots_spline[c(i_max_error, i_max_error + 1)]),
+                      knots_spline[seq(i_max_error + 1, neval)])
+    vals_spline <- c(vals_spline[seq(1, i_max_error)],
+                     vintegrand_dx(knots_spline[i_max_error + 1],
+                                   pi0 = pi0, x = x, mu = mu, sigma = sigma,
+                                   Omega = Omega, Sigma = Sigma),
+                     vals_spline[seq(i_max_error + 1, neval)])
+    
+    neval <- neval + 1
+    knots_diff <-  knots_spline[-1] - knots_spline[-neval]
+    errors_spline <- 
+      abs(knots_diff *
+            (vals_spline[-1] - vals_spline[-neval]))
+    
+    fit_lm <- 
+      lm(vals_spline ~ 
+           splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1))
+    coefs_spline <- 
+      SplinesUtils::RegBsplineAsPiecePoly(
+        fit_lm,
+        "splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1)",
+        shift = FALSE)$PiecePoly$coef
+    # coefs_spline <-
+    #   SplinesUtils::CubicInterpSplineAsPiecePoly(
+    #     x = knots_spline,
+    #     y = vals_spline,
+    #     method = "natural")$PiecePoly$coef
+    integral_dx <- sum(coefs_spline[1, ] * knots_spline[-1] +
+                         coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
+                         coefs_spline[1, ] * knots_spline[-neval] - 
+                         coefs_spline[2, ] / 2 * knots_spline[-neval]^2)
+    error_dx <- sum(errors_spline)
+    verrors <- c(verrors, error_dx)
+    
+    if(neval >= control$max_eval |
+       error_dx / abs(integral_dx) < control$rel_tol |
+       error_dx < control$abs_tol)
+      break
+  }
+  
+  error_dx <- sum(errors_spline)
+  verrors <- c(verrors, error_dx)
+  
+  # modify eloga, eloga2
+  integral_eloga <- sum(coefs_spline[1, ] / 2 * knots_spline[-1]^2 + 
+                          coefs_spline[2, ] / 3 * knots_spline[-1]^3 -
+                          coefs_spline[1, ] / 2 * knots_spline[-neval]^2 -
+                          coefs_spline[2, ] / 3 * knots_spline[-neval]^3)
+  error_eloga <- sum(abs(knots_diff *
+                           ((vals_spline * knots_spline)[-1] - 
+                              (vals_spline * knots_spline)[-neval])))
+  integral_eloga2 <- sum(coefs_spline[1, ] / 3 * knots_spline[-1]^3 + 
+                           coefs_spline[2, ] / 4 * knots_spline[-1]^4 -
+                           coefs_spline[1, ] / 3 * knots_spline[-neval]^3 -
+                           coefs_spline[2, ] / 4 * knots_spline[-neval]^4)
+  error_eloga2 <- sum(abs(knots_diff *
+                            ((vals_spline * knots_spline^2)[-1] - 
+                               (vals_spline * knots_spline^2)[-neval])))
+  
+  # refit for ea
+  fit_lm <- 
+    lm(vals_spline * exp(knots_spline) ~ 
+         splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1))
+  coefs_spline <- 
+    SplinesUtils::RegBsplineAsPiecePoly(
+      fit_lm,
+      "splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1)",
+      shift = FALSE)$PiecePoly$coef
+  integral_ea <- sum(coefs_spline[1, ] / 3 * knots_spline[-1]^3 + 
+                       coefs_spline[2, ] / 4 * knots_spline[-1]^4 -
+                       coefs_spline[1, ] / 3 * knots_spline[-neval]^3 -
+                       coefs_spline[2, ] / 4 * knots_spline[-neval]^4)
+  error_ea <-  sum(abs(knots_diff *
+                         ((vals_spline * exp(knots_spline))[-1] - 
+                            (vals_spline * exp(knots_spline))[-neval])))
+  
+  return(c("ea" = integral_ea / integral_dx,
+           "logLik" = log(integral_dx),
+           "eloga" = integral_eloga / integral_dx,
+           "eloga2" = integral_eloga2 / integral_dx,
+           "error_ea" = error_ea,
+           "error_dx" = error_dx,
+           "error_eloga" = error_eloga,
+           "error_eloga2" = error_eloga2,
+           "time" = as.numeric(Sys.time() - time_start, units = "secs")))
+}
 
 log_intx_dc <- function(data, zero_inflation = TRUE) {
   lgamma_data <- lgamma(data + 1)

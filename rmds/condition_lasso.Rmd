@@ -1,0 +1,72 @@
+---
+title: "Conditioning lasso fit with ridge"
+author: "Siyuan Ma"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+knitr::opts_chunk$set(echo = FALSE)
+library(magrittr)
+library(ggplot2)
+dir_output <- "/n/janson_lab/lab/sma/sparsedossa_update/results/Stool_vaginal/"
+dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+```
+
+```{r load results, include=FALSE}
+batchtools::loadRegistry(file.dir = "r_batchtools_reg/Stool_vaginal", writeable = FALSE)
+tb_result <- tb_job %>% 
+  dplyr::group_by(i_job) %>% 
+  dplyr::mutate(fit_EM = 
+  {
+    if(paste0("fit_", i_job, ".RData") %in% list.files(dir_output)) {
+      load(paste0(dir_output, "fit_", i_job, ".RData"))
+      list(fit_EM)
+    } else {
+      list(NULL)
+    }
+  }) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::filter(fit_EM %>% 
+                  purrr::map_lgl(~ !is.null(.x)),
+                !(penalize_method %in% c("ridge1", "ridge2")),
+                dataset == "vaginal")
+```
+
+```{r format results}
+tb_result <- tb_result %>% 
+  dplyr::arrange(lambdas) %>% 
+  dplyr::mutate(log10_lambda = log10(lambdas) %>% 
+                  format(digits = 2) %>% 
+                  forcats::as_factor()) %>% 
+  dplyr::group_by(i_job) %>% 
+  dplyr::mutate(sparsity_Omega = fit_EM[[1]]$l_fits_full[[1]]$fit$Omega %>% 
+                  SparseDOSSA2:::lower_tri() %>% {mean(. == 0)},
+                sparsity_Sigma = fit_EM[[1]]$l_fits_full[[1]]$fit$Sigma %>% 
+                  SparseDOSSA2:::lower_tri() %>% {mean(. == 0)},
+                logLik_CV = mean(setdiff(fit_EM[[1]]$logLik_CV, -Inf)),
+                logLik_CV_sd = sd(setdiff(fit_EM[[1]]$logLik_CV, -Inf)),
+                logLik = fit_EM[[1]]$l_fits_full[[1]]$fit$logLik) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::filter(!is.na(logLik))
+```
+
+Main conclusion: 
+
+* Lasso penalization is preceded by small ridge penalization (1e-6)
+
+* Able to evaluate a wider grid for lasso
+
+```{r examine log likelihood and sparsity, echo=FALSE}
+tb_result %>% 
+  dplyr::arrange(lambdas) %>% 
+  dplyr::mutate(log10_lambda = log10(lambdas) %>% 
+                  forcats::as_factor()) %>% 
+  ggplot(aes(x = log10_lambda, y = logLik_CV, color = penalize_method)) +
+  geom_point(position = position_dodge(width = 0.25), size = 3) +
+  geom_point(aes(y = logLik), alpha = 0.5, position = position_dodge(width = 0.25), shape = 2) +
+  geom_errorbar(aes(ymin = logLik_CV - logLik_CV_sd, ymax = logLik_CV + logLik_CV_sd),
+                width = 0.02,
+                position = position_dodge(width = 0.25))
+```

@@ -12,12 +12,12 @@ library(ggplot2)
 ```{r setup2, include=FALSE}
 # Registry
 # batchtools::makeRegistry(file.dir = "r_batchtools_reg/Simulation_smaller2", package = "magrittr")
-batchtools::loadRegistry(file.dir = "r_batchtools_reg/Simulation_smaller", writeable = TRUE)
+batchtools::loadRegistry(file.dir = "r_batchtools_reg/Simulation_smaller2", writeable = TRUE)
 batchtools::clearRegistry()
 
 # Grid parameters
-ncpus <- 31
-partition <- "janson"
+ncpus <- 45
+partition <- "janson_cascade"
 walltime <- 200 * 3600
 
 # Output dir
@@ -93,21 +93,19 @@ load(paste0(dir_output, "tb_job.RData"))
 
 ```{r one job}
 one_job <- function(i_job) {
-  future::plan(list(future::sequential, future::sequential, future::multicore))
+  future::plan(list(future::sequential, future::multicore))
   i_tb_job <- tb_job[i_job, ]
   x_samples <- i_tb_job$x_samples[[1]]
   
-  fit_EM <- EM_diagnose_CV(
+  fit_EM <- EM_diagnose(
     data = x_samples,
     lambdas = i_tb_job$lambdas[[1]],
-    K = 5,
-    control = list(abs_tol = 1e-3,
-                   rel_tol = 5e-2,
-                   maxit = 50,
-                   control_numint = list(method = "pcubature"),
-                   verbose = TRUE,
-                   penalize_method = i_tb_job$penalize_method,
-                   debug_dir = paste0(dir_output, i_job, "/")))
+    control = list(
+      abs_tol = 5e-3,
+      rel_tol = 1,
+      maxit = 30,
+      verbose = TRUE,
+      debug_dir = paste0(dir_output, i_job, "/")))
   save(fit_EM, file = paste0(dir_output, "fit_", i_job, ".RData"))
 }
 ```
@@ -115,8 +113,13 @@ one_job <- function(i_job) {
 ```{r submit jobs}
 time_start <- Sys.time()
 tb_ids <- batchtools::batchMap(one_job, 
-                               i_job = tb_job$i_job)
+                               i_job = tb_job %>% 
+                                 dplyr::filter(n == 100, R == 1) %>% 
+                                 extract2("i_job"))
 batchtools::batchExport(mget(ls()))
-batchtools::submitJobs(resources =  list(ncpus = ncpus, partition = partition, walltime = walltime))
+batchtools::submitJobs(
+  resources =  list(ncpus = ncpus, 
+                    partition = partition, 
+                    walltime = walltime))
 print(Sys.time() - time_start)
 ```

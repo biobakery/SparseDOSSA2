@@ -5,6 +5,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+knitr::opts_chunk$set(echo=FALSE)
 library(magrittr)
 library(ggplot2)
 ```
@@ -18,7 +19,7 @@ batchtools::clearRegistry()
 # Grid parameters
 ncpus <- 45
 partition <- "janson_cascade"
-walltime <- 10 * 3600
+walltime <- 24 * 3600
 
 # Output dir
 dir_output <- "/n/janson_lab/lab/sma/sparsedossa_update/results/Stool_vaginal/"
@@ -27,10 +28,21 @@ smar::sourceDir("SparseDOSSA2/R/")
 ```
 
 ```{r setup simulation params}
-tb_job <- tidyr::crossing(
-  dataset = c("vaginal", "stool"),
-  lambda = 10^seq(from = -1, to = 0, length.out = 21)
+tb_job <- rbind(
+  tibble::tibble(
+    penalize_method = "huge",
+    lambdas = 10^seq(from = -2, to = 0, length.out = 11)
+  ),
+  tidyr::expand_grid(
+    penalize_method = c("ridge1", "ridge2"),
+    lambdas = 10^seq(from = -6, to = 0, by = 1)
+  ),
+  tidyr::expand_grid(
+    penalize_method = "huge_conditioned",
+    lambdas = 10^seq(from = -3, to = -1, length.out = 11)
+  )
 ) %>% 
+  tidyr::expand_grid(dataset = c("vaginal", "stool")) %>% 
   dplyr::mutate(i_job = seq_len(dplyr::n()))
 save(tb_job, file = paste0(dir_output, "tb_job.RData"))
 ```
@@ -63,16 +75,18 @@ one_job <- function(i_job) {
     x_samples <- x_samples_stool
 
   # fit SparseDOSSA
-  time_start <- Sys.time()
   fit_EM <- EM_diagnose_CV(
     data = x_samples,
-    lambdas = i_tb_job$lambda,
+    lambdas = i_tb_job$lambdas,
     K = 5,
     control = list(abs_tol = 1e-3,
                    rel_tol = 1e-1,
+                   maxit = 50,
                    control_numint = list(method = "hcubature",
-                                         abs_tol = 0),
+                                         abs_tol = 0,
+                                         maxit_getLimits = 10),
                    verbose = TRUE,
+                   penalize_method = i_tb_job$penalize_method,
                    debug_dir = paste0(dir_output, i_job, "/")))
   save(fit_EM, file = paste0(dir_output, "fit_", i_job, ".RData"))
 }
@@ -81,8 +95,97 @@ one_job <- function(i_job) {
 ```{r submit jobs}
 time_start <- Sys.time()
 tb_ids <- batchtools::batchMap(one_job, 
-                               i_job = tb_job$i_job)
+                               i_job = tb_job$i_job[-(1:50)])
 batchtools::batchExport(mget(ls()))
 batchtools::submitJobs(resources =  list(ncpus = ncpus, partition = partition, walltime = walltime))
 print(Sys.time() - time_start)
+```
+
+```{r debug}
+# load(paste0(dir_output, "16/K0/debug_lambda_1.RData"))
+# l_fits_full <- list(list(
+#   l_fits = list(list(lambda = lambdas[1],
+#                      fit = rev(l_debug$ll_params)[[1]],
+#                      convergence = TRUE)),
+#   l_fitering = l_debug$l_filtering
+# ))
+# for(k in 1:5) {
+#   data_training <- data[CV_folds != k, ]
+#   data_testing <- data[CV_folds == k, ]
+#   control_tmp <- control
+#   control_tmp$debug_dir <- paste0(control$debug_dir, "K", k, "/")
+#   
+#   load(paste0(dir_output, "16/K", k, "/debug_lambda_1.RData"))
+#   result_k <- list(l_fits = list(list(lambda = lambdas[1],
+#                                       fit = rev(l_debug$ll_params)[[1]],
+#                                       convergence = TRUE)),
+#                    l_filtering = l_debug$l_filtering)
+#   
+#   # Fill in parameters estimates for features not present in training data
+#   for(i_lambda in seq_along(lambdas))
+#     result_k$l_fits[[i_lambda]]$fit <- fill_estimates_CV(result_k$l_fits[[i_lambda]]$fit,
+#                                                          l_fits_full[[i_lambda]]$fit,
+#                                                          result_k$l_filtering$ind_feature)
+#   
+#   # Calculate ll in testing data
+#   params <- result_k$l_fits[[1]]$fit
+#   for(i_sample in seq_len(nrow(data_testing))) {
+#     logLik <- dx(x = data_testing[i_sample, , drop = TRUE],
+#                  pi0 = params$pi0, mu = params$mu,
+#                  sigma = params$sigma, Omega = params$Omega,
+#                  control = control$control_numint,
+#                  log.p = TRUE)
+#   }
+# }
+# 
+# for(i_sample in 200:nrow(data)) {
+#   print(i_sample)
+#   print(Sys.time())
+#   
+#   num <- ea(x = data[i_sample, , drop = TRUE],
+#             pi0 = params$pi0, mu = params$mu, 
+#             sigma = params$sigma, Omega = params$Omega,
+#             control = c(control$control_numint, 
+#                         list(only_value = FALSE)))
+#   eloga_num <- eloga(x = data[i_sample, , drop = TRUE],
+#                      pi0 = params$pi0, mu = params$mu, 
+#                      sigma = params$sigma, Omega = params$Omega,
+#                      control = c(control$control_numint, 
+#                                  list(only_value = FALSE)))
+#   eloga2_num <- eloga2(x = data[i_sample, , drop = TRUE],
+#                        pi0 = params$pi0, mu = params$mu, 
+#                        sigma = params$sigma, Omega = params$Omega,
+#                        control = c(control$control_numint, 
+#                                    list(only_value = FALSE)))
+#   denom <- dx(x = data[i_sample, , drop = TRUE],
+#               pi0 = params$pi0, mu = params$mu, 
+#               sigma = params$sigma, Omega = params$Omega,
+#               control = c(control$control_numint, 
+#                           list(only_value = FALSE)))
+#   
+#   if(any(is.na(c("mean" = num$integral / denom$integral,
+#                  "error" = abs(num$error / denom$integral) + 
+#                  abs(num$integral / (denom$integral)^2 * 
+#                      denom$error),
+#                  "logLik" = log(denom$integral),
+#                  "eloga" = eloga_num$integral / denom$integral,
+#                  "eloga2" = eloga2_num$integral / denom$integral
+#   ))))
+#     break
+# }
+# 
+# job_ids <- tb_job$i_job %>% 
+#   setdiff(batchtools::findDone()$job.id) %>% 
+#   setdiff(batchtools::findErrors()$job.id)
+# 
+# setdiff(job_ids, 24) %>% 
+#   purrr::map_dbl(
+#     ~ {
+#       if("K0" %in% dir(paste0(dir_output, .x, "/"))) {
+#         load(paste0(dir_output, .x, "/K0/debug_lambda_1.RData"))
+#         length(l_debug$ll_params)
+#       }
+#       else 0
+#     }
+#   )
 ```

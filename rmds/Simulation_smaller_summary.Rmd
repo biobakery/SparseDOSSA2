@@ -12,279 +12,279 @@ library(ggplot2)
 dir_output <- "/n/janson_lab/lab/sma/sparsedossa_update/results/Simulation_smaller/"
 ```
 
-```{r load datasets, include=FALSE}
-# load("data/physeqs/HMP1II_vaginal.RData")
-# load("data/physeqs/HMP1II_stool.RData")
-# x_samples_vaginal <- physeq_vaginal %>% 
-#   smar::otu_table2() %>% 
-#   t()
-# x_samples_vaginal <- x_samples_vaginal[, apply(x_samples_vaginal > 0, 2, sum) >= 5]
-# x_samples_vaginal <- apply(x_samples_vaginal, 1, function(x) x / sum(x)) %>% 
-#   t()
-# 
-# x_samples_stool <- physeq_stool %>% 
-#   smar::otu_table2() %>% 
-#   t()
-# x_samples_stool <- x_samples_stool[, apply(x_samples_stool > 0, 2, sum) >= 5]
-# x_samples_stool <- apply(x_samples_stool, 1, function(x) x / sum(x)) %>% 
-#   t()
-# 
-# corr_stool <- cor(x_samples_stool, method = "spear")
-# corr_vaginal <- cor(x_samples_vaginal, method = "spear")
-# corr_stool_mod <- corr_stool %>% SparseDOSSA2:::iRho()
-# diag(corr_stool_mod) <- 0
-# corr_vaginal_mod <- corr_vaginal %>% SparseDOSSA2:::iRho()
-# diag(corr_vaginal_mod) <- 0
-```
-
 ```{r load results, include=FALSE}
-batchtools::loadRegistry(file.dir = "r_batchtools_reg/Simulation_smaller/", writeable = FALSE)
-load(paste0(dir_output, "tb_job.RData"))
-tb_result <- tb_job %>% 
-  dplyr::filter(i_job %in% batchtools::findDone()$job.id) %>% 
-  dplyr::group_by(i_job) %>% 
-  dplyr::mutate(fit_EM = 
-                  {
-                    load(paste0(dir_output, "fit_", i_job, ".RData"))
-                    list(fit_EM)
-                  }) %>% 
-  dplyr::ungroup()
+# batchtools::loadRegistry(file.dir = "r_batchtools_reg/Simulation_smaller/", writeable = FALSE)
+smar::sourceDir("SparseDOSSA2/R/")
+# set.seed(1)
+# tb_job_params_x <- tb_job %>%
+#   dplyr::filter(!duplicated(i_params))
+# for(i_params in tb_job_params_x$i_params) {
+#   params_sim_x <- params_a_to_x(tb_job_params_x$params_sim[[i_params]])
+#   save(params_sim_x, file = paste0(dir_output,
+#                                    "params_sim_x_",
+#                                    i_params,
+#                                    ".RData"))
+# }
+# tb_job_params_x <- tb_job_params_x %>%
+#   dplyr::mutate(params_sim_x =
+#                   i_params %>%
+#                   purrr::map(
+#                     ~{
+#                       load(paste0(dir_output,
+#                                   "params_sim_x_",
+#                                   .x,
+#                                   ".RData"))
+#                       params_sim_x
+#                     })) %>%
+#   dplyr::select(i_params, params_sim_x) %>%
+#   dplyr::right_join(tb_job, by = "i_params") %>%
+#   dplyr::rename(lambda_sim = lambda)
+# save(tb_job_params_x, file = paste0(dir_output, "tb_job_params_x.RData"))
+# load(paste0(dir_output, "tb_job_params_x.RData"))
+# tb_result <- tb_job_params_x %>%
+#   dplyr::filter(i_job %in% batchtools::findDone()$job.id) %>%
+#   dplyr::group_by(i_job) %>% 
+#   dplyr::mutate(fit_EM = {
+#     load(paste0(dir_output, "fit_", i_job, ".RData"))
+#     list(fit_EM)
+#   }) %>% 
+#   dplyr::ungroup()
 ```
 
-```{r format results}
-tb_result <- tb_result %>% 
-  dplyr::arrange(lambda) %>% 
-  dplyr::mutate(log10_lambda = log10(lambda) %>% 
-                  format(digits = 2) %>% 
-                  forcats::as_factor()) %>% 
-  dplyr::group_by(i_job) %>% 
-  dplyr::mutate(logLik_CV = mean(setdiff(fit_EM[[1]]$logLik_CV, -Inf)),
-                logLik = fit_EM[[1]]$l_fits_full[[1]]$fit$logLik,
-                sparsity_Omega = fit_EM[[1]]$l_fits_full[[1]]$fit$Omega %>% 
-                  SparseDOSSA2:::lower_tri() %>% {mean(. == 0)},
-                sparsity_Sigma = fit_EM[[1]]$l_fits_full[[1]]$fit$Sigma %>% 
-                  SparseDOSSA2:::lower_tri() %>% {mean(. == 0)}) %>% 
-  dplyr::ungroup()
+```{r format results, include=FALSE}
+# tb_result_formatted <- tb_result$i_job %>% 
+#   purrr::map_dfr(function(i_job) {
+#     tibble::tibble(
+#       lambda_fit = tb_result$lambdas[[i_job]],
+#       fit = tb_result$fit_EM[[i_job]]$l_fits_full,
+#       params_fit = fit %>% 
+#         purrr::map("fit"),
+#       logLik = params_fit %>% 
+#         purrr::map_dbl("logLik"),
+#       logLik_CV = tb_result$fit_EM[[i_job]]$logLik_CV %>% 
+#         apply(2, function(x){mean(x[x > -Inf])}),
+#       sparsity_fit = params_fit %>% 
+#         purrr::map_dbl(~.x$Omega %>% lower_tri() %>% {mean(. == 0)}),
+#       i_job = i_job
+#     )
+#   }) %>% 
+#   dplyr::select(-fit) %>% 
+#   dplyr::filter(!is.na(logLik)) %>% 
+#   dplyr::left_join(tb_result, by = "i_job") %>% 
+#   dplyr::select(-fit_EM)
+# save(tb_result_formatted, file = paste0(dir_output, "tb_result_formatted.RData"))
+load(paste0(dir_output, "tb_result_formatted.RData"))
 ```
+
+Main conclusion: 
+
+* Graphical lasso lands at solutions with different sparsities than the truth as $n \rightarrow \infty$. The solution still induces good $x$ parameter estimations (i.e. non identifiability of the likelihood)?
+* Ridge behaves very differently from the real data fit - different sparsity pattern?
 
 # Examine fitted results
 
-```{r examine log likelihood and sparsity}
-tb_result %>%
-  ggplot(aes(x = log10(lambda), y = logLik_CV, color = as.character(n))) +
-  geom_point(aes(shape = as.character(R))) +
-  geom_line(aes(linetype = as.character(R))) +
-  facet_wrap(~ i_param, scales = "free_y")
-
-tb_result %>%
-  ggplot(aes(x = log10_lambda, y = sparsity_Omega)) +
-  geom_point() + geom_line() +
-  facet_grid(dataset ~ ., scales = "free_y")
-
-tb_result %>%
-  ggplot(aes(x = log10_lambda, y = sparsity_Sigma)) +
-  geom_point() + geom_line() +
-  facet_grid(dataset ~ ., scales = "free_y")
-
-tb_simulation %>%
-  ggplot(aes(x = log10(lambda), y = sparsity_Sigma)) +
-  geom_point() + geom_line() +
-  facet_grid(dataset ~ ., scales = "free_y")
-tb_simulation %>% 
-  dplyr::filter(sparsity_Omega != 0 & sparsity_Omega != 1) %>% 
-  ggplot(aes(x = dataset, y = sparsity_Omega - sparsity_Sigma)) +
-  geom_boxplot(outlier.shape = NA) +
-  geom_point(position = position_jitter())
-```
-
-* $l$ dcreases with $\lambda$ which makes sense. Sparsity increases which also makes sense.
-* Sparsity $\in (0, 1)$ only for a small interval of $\lambda$, but this is the interesting part? i.e., varying magnitude of $\Omega$ but not changing its sparsity should not matter much in our simulation?
-* For non-trivial cases, sparsity in $\hat{\Omega}$ and $\hat{\Sigma} (=\hat{\Omega}^{-1})$ are very close. 
-  * glasso algorithm first thresholds input by $\lambda$, so it makes sense that $\hat{\Omega}$ and $\hat{\Sigma}$ are block diagonal
-
-```{r examine correlations, fig.width=30}
-tb_simulation_corr <- tb_simulation %>% 
-  dplyr::filter(lambda > 0.1, lambda < sqrt(10)) %>% 
-  dplyr::group_by(i) %>% 
-  dplyr::mutate(p_corr =
-                  {
-                    Omega <- abs(params[[1]]$Omega) > 0
-                    rownames(Omega) <- colnames(Omega) <- paste0("Feature", seq_len(nrow(Omega)))
-                    if(dataset == "stool")
-                      feature_order <- order(-apply(abs(corr_stool_mod), 2, max))
-                    if(dataset == "vaginal")
-                      feature_order <- order(-apply(abs(corr_vaginal_mod), 2, max))
-                    
-                    p <- Omega[feature_order, feature_order] %>% 
-                      as.data.frame() %>% 
-                      tibble::rownames_to_column(var="rowname") %>% 
-                      dplyr::mutate(rowname = forcats::as_factor(rowname)) %>% 
-                      tidyr::gather(key="colname", value="non_zero", -rowname) %>% 
-                      dplyr::mutate(colname = forcats::as_factor(colname)) %>% 
-                      ggplot(aes(x = rowname, y = colname, fill = non_zero)) +
-                      geom_tile(color = NA, size = 0) +
-                      scale_fill_manual(values = c("TRUE"="black", "FALSE"="white")) +
-                      theme(axis.title = element_blank(),
-                            axis.text = element_blank(),
-                            axis.ticks = element_blank(),
-                            legend.position = "none",
-                            panel.grid.major = element_blank(), 
-                            panel.grid.minor = element_blank()) +
-                      coord_fixed()
-                    list(p)
-                  })
-
-# stool
-p_stool <- tb_simulation_corr %>% 
-  dplyr::filter(dataset == "stool") %>% 
-  extract2("p_corr") %>% 
-  cowplot::plot_grid(plotlist = ., nrow = 1)
-ggsave(filename = paste0(dir_output, "fig_corr_stool.jpg"),
-       p_stool,
-       width = 60, height = 4,
-       limitsize = FALSE)
-print(p_stool)
-# vaginal
-p_vaginal <- tb_simulation_corr %>% 
+```{r examine log likelihood and sparsity, echo=FALSE}
+tb_result_formatted %>%
   dplyr::filter(dataset == "vaginal") %>% 
-  extract2("p_corr") %>% 
-  cowplot::plot_grid(plotlist = ., nrow = 1)
-ggsave(filename = paste0(dir_output, "fig_corr_vaginal.jpg"),
-       p_vaginal,
-       width = 60, height = 4,
-       limitsize = FALSE)
-print(p_vaginal)
+  dplyr::mutate(logLik_CV = ifelse(logLik_CV > -50,
+                                   logLik_CV,
+                                   NA_real_)) %>% 
+  ggplot(aes(x = log10(lambda_fit), y = logLik_CV, color = as.character(R))) +
+  geom_point(aes(shape = as.character(n))) +
+  geom_line() +
+  facet_wrap(~ i_params + penalize_method + n, ncol = 6, scales = "free_x") +
+  ggtitle("vaginal sets")
+
+tb_result_formatted %>%
+  dplyr::filter(dataset == "vaginal") %>% 
+  ggplot(aes(x = log10(lambda_fit), y = sparsity_fit, color = as.character(R))) +
+  geom_point(aes(shape = as.character(n))) +
+  geom_hline(aes(yintercept = sparsity)) +
+  geom_line() +
+  facet_wrap(~ i_params + penalize_method + n, ncol = 6, scales = "free_x") +
+  ggtitle("vaginal sets")
+
+tb_result_formatted %>%
+  dplyr::filter(dataset == "stool") %>% 
+  dplyr::mutate(logLik_CV = ifelse(logLik_CV > -250,
+                                   logLik_CV,
+                                   NA_real_)) %>% 
+  ggplot(aes(x = log10(lambda_fit), y = logLik_CV, color = as.character(R))) +
+  geom_point(aes(shape = as.character(n))) +
+  geom_line() +
+  facet_wrap(~ i_params + penalize_method + n, ncol = 6, scales = "free_x") +
+  ggtitle("stool sets")
+
+tb_result_formatted %>%
+  dplyr::filter(dataset == "stool") %>% 
+  ggplot(aes(x = log10(lambda_fit), y = sparsity_fit, color = as.character(R))) +
+  geom_point(aes(shape = as.character(n))) +
+  geom_hline(aes(yintercept = sparsity)) +
+  geom_line() +
+  facet_wrap(~ i_params + penalize_method + n, ncol = 6, scales = "free_x") +
+  ggtitle("stool sets")
+
 ```
 
-# Per-feature results
+## Parameter visualization
+```{r examine values, echo=FALSE, fig.width=25, fig.height=10}
+tb_result_top_CV <- tb_result_formatted %>%
+  dplyr::group_by(i_job) %>%
+  dplyr::arrange(-logLik_CV) %>%
+  dplyr::slice(1) %>%
+  dplyr::ungroup()
+# set.seed(1)
+# for(i in seq_len(nrow(tb_result_top_CV))) {
+#   print(i)
+#   load(paste0(dir_output, "fit_", tb_result_top_CV$i_job[i], ".RData"))
+#   params_fit_x <- params_a_to_x(fit_EM$l_fits_full[[tb_result_top_CV$i_lambda[i]]]$fit)
+#   save(params_fit_x, file = paste0(dir_output,
+#                                    "params_fit_x_",
+#                                    tb_result_top_CV$i_job[i],
+#                                    ".RData"))
+# }
+tb_result_top_CV <- tb_result_top_CV %>% 
+  dplyr::group_by(i_job) %>% 
+  dplyr::mutate(params_fit_x = {
+    load(paste0(dir_output,
+                "params_fit_x_", i_job, ".RData"))
+    list(params_fit_x)
+  }) %>% 
+  dplyr::ungroup()
 
-```{r per-feature results, fig.width=50}
-# tb_perFeature <- tibble::tibble(
-#   dataset = c("stool", "vaginal")
-# ) %>%
-#   dplyr::group_by(dataset) %>%
-#   dplyr::mutate(params_x =
-#   {
-#     if(dataset == "stool")
-#       c(SparseDOSSA2:::get_marginals(x_samples_stool) %>%
-#           as.data.frame(),
-#         list(Corr = corr_stool)) %>%
-#       list()
-#     else
-#       c(SparseDOSSA2:::get_marginals(x_samples_vaginal) %>%
-#           as.data.frame(),
-#         list(Corr = corr_vaginal)) %>%
-#       list()
-#   }) %>%
-#   dplyr::ungroup() %>%
-#   dplyr::right_join(tb_simulation, by = "dataset") %>%
-#   dplyr::group_by(i) %>%
-#   dplyr::mutate(params_x_fit = {
-#     params_fit <- params[[1]]
-#     a_samples_SparseDOSSA2 <- SparseDOSSA2:::rcopulasso(n = 10000,
-#                                                         pi0 = params_fit$pi0,
-#                                                         mu = params_fit$mu,
-#                                                         sigma = params_fit$sigma,
-#                                                         Omega = params_fit$Omega)
-#     a_samples_SparseDOSSA2 <- a_samples_SparseDOSSA2[!apply(a_samples_SparseDOSSA2 == 0, 1, all), ]
-#     x_samples_SparseDOSSA2 <- t(apply(a_samples_SparseDOSSA2, 1, function(x) x / sum(x)))
-# 
-#     c(SparseDOSSA2:::get_marginals(x_samples_SparseDOSSA2) %>%
-#           as.data.frame(),
-#         list(Corr = cor(x_samples_SparseDOSSA2, method = "spear"))) %>%
-#       list()
-#   })
-# save(tb_perFeature, file = paste0(dir_output, "tb_perFeature.RData"))
-load(paste0(dir_output, "tb_perFeature.RData"))
-# Plot per feature means
-tb_perFeature <- seq_len(nrow(tb_perFeature)) %>% 
-  purrr::map_dfr(
-    function(i)
-      c("mu", "sigma") %>% 
-      purrr::map_dfr(
-        function(variable)
-          tibble::tibble(
-            data = tb_perFeature$params_x[[i]][[variable]],
-            fit = tb_perFeature$params_x_fit[[i]][[variable]],
-            variable = variable)
-      ) %>% 
-      rbind(
-        tibble::tibble(
-          data = tb_perFeature$params_x[[i]][["Corr"]][lower.tri(tb_perFeature$params_x[[i]][["Corr"]])],
-          fit = tb_perFeature$params_x_fit[[i]][["Corr"]][lower.tri(tb_perFeature$params_x[[i]][["Corr"]])],
-          variable = "Corr")
-      ) %>% 
-      dplyr::mutate(i = tb_perFeature$i[i])
-  ) %>% 
-  dplyr::left_join(tb_simulation, by = "i")
+for(i_dataset in c("vaginal", "stool")) {
+  p <- seq_len(nrow(tb_result_top_CV)) %>%
+    purrr::map_dfr(function(i_row) {
+      tibble::tibble(i_job = tb_result_top_CV$i_job[i_row],
+                     x_param = tb_result_top_CV$params_sim_x[[i_row]]$pi0,
+                     x_fit_param = tb_result_top_CV$params_fit_x[[i_row]]$pi0)
+    }) %>%
+    dplyr::left_join(tb_result_top_CV, by = "i_job") %>%
+    dplyr::filter(dataset == i_dataset) %>%
+    ggplot(aes(x = x_param, y = x_fit_param, color = as.character(R))) +
+    geom_point() +
+    geom_abline(intercept = 0, slope = 1) +
+    ggpubr::stat_cor() +
+    facet_wrap(~ i_params + penalize_method + n, ncol = 6) +
+    coord_fixed() +
+    ggtitle(paste0(i_dataset, " x_pi0"))
+  print(p)
+  
+  p <- seq_len(nrow(tb_result_top_CV)) %>%
+    purrr::map_dfr(function(i_row) {
+      tibble::tibble(i_job = tb_result_top_CV$i_job[i_row],
+                     x_param = tb_result_top_CV$params_sim_x[[i_row]]$mu,
+                     x_fit_param = tb_result_top_CV$params_fit_x[[i_row]]$mu)
+    }) %>%
+    dplyr::left_join(tb_result_top_CV, by = "i_job") %>%
+    dplyr::filter(dataset == i_dataset) %>%
+    ggplot(aes(x = x_param, y = x_fit_param, color = as.character(R))) +
+    geom_point() +
+    geom_abline(intercept = 0, slope = 1) +
+    ggpubr::stat_cor() +
+    facet_wrap(~ i_params + penalize_method + n, ncol = 6) +
+    coord_fixed() +
+    ggtitle(paste0(i_dataset, " x_mu"))
+  print(p)
+  
+  p <- seq_len(nrow(tb_result_top_CV)) %>%
+    purrr::map_dfr(function(i_row) {
+      tibble::tibble(i_job = tb_result_top_CV$i_job[i_row],
+                     x_param = tb_result_top_CV$params_sim_x[[i_row]]$sigma,
+                     x_fit_param = tb_result_top_CV$params_fit_x[[i_row]]$sigma)
+    }) %>%
+    dplyr::left_join(tb_result_top_CV, by = "i_job") %>%
+    dplyr::filter(dataset == i_dataset) %>%
+    ggplot(aes(x = x_param, y = x_fit_param, color = as.character(R))) +
+    geom_point() +
+    geom_abline(intercept = 0, slope = 1) +
+    ggpubr::stat_cor() +
+    facet_wrap(~ i_params + n, ncol = 3) +
+    facet_wrap(~ i_params + penalize_method + n, ncol = 6) +
+    coord_fixed() +
+    ggtitle(paste0(i_dataset, " x_sigma"))
+  print(p)
+  # 
+  n_feature <- tb_result_top_CV %>% 
+    dplyr::filter(dataset == i_dataset) %>% 
+    extract2("params_fit_x") %>% 
+    {length(.[[1]]$pi0)}
+  features_subset <- sample.int((n_feature - 1) * (n_feature - 2) / 2, size = 1000)
+  p <- seq_len(nrow(tb_result_top_CV)) %>%
+    purrr::map_dfr(function(i_row) {
+      tibble::tibble(i_job = tb_result_top_CV$i_job[i_row],
+                     x_param = tb_result_top_CV$params_sim_x[[i_row]]$Corr %>% lower_tri() %>% {.[features_subset]},
+                     x_fit_param = tb_result_top_CV$params_fit_x[[i_row]]$Corr %>% lower_tri() %>% {.[features_subset]})
+    }) %>%
+    dplyr::left_join(tb_result_top_CV, by = "i_job") %>%
+    dplyr::filter(dataset == i_dataset) %>%
+    ggplot(aes(x = x_param, y = x_fit_param, color = as.character(R))) +
+    geom_point() +
+    geom_abline(intercept = 0, slope = 1) +
+    ggpubr::stat_cor() +
+    facet_wrap(~ i_params + penalize_method + n, ncol = 6) +
+    coord_fixed() +
+    ggtitle(paste0(i_dataset, " x_Corr"))
+  print(p)
+}
 
-p_mu <- tb_perFeature %>% 
-  dplyr::filter(variable == "mu") %>% 
-  ggplot(aes(x = data, y = fit)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1) +
-  facet_grid(dataset ~ log10_lambda) +
-  coord_fixed() +
-  ggtitle("mu")
-ggsave(filename = paste0(dir_output, "fig_mu.jpg"),
-       p_mu,
-       width = 80, height = 10,
-       limitsize = FALSE)
-
-p_sigma <- tb_perFeature %>% 
-  dplyr::filter(variable == "sigma") %>% 
-  ggplot(aes(x = data, y = fit)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1) +
-  facet_grid(dataset ~ log10_lambda) +
-  coord_fixed() +
-  ggtitle("sigma")
-ggsave(filename = paste0(dir_output, "fig_sigma.jpg"),
-       p_sigma,
-       width = 80, height = 10,
-       limitsize = FALSE)
-
-p_Corr <- tb_perFeature %>% 
-  dplyr::filter(variable == "Corr") %>% 
-  ggplot(aes(x = data, y = fit)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1) +
-  facet_grid(dataset ~ log10_lambda) +
-  coord_fixed() +
-  ggtitle("Corr")
-ggsave(filename = paste0(dir_output, "fig_Corr.jpg"),
-       p_Corr,
-       width = 80, height = 10,
-       limitsize = FALSE)
-
-print(p_mu)
-print(p_sigma)
-print(p_Corr)
-```
-
-```{r debug}
-# diff <- (0:5) %>% 
-#   purrr::map(function(k) {
-#     1:11 %>% 
-#       purrr::map(function(i_lambda) {
-#         load(paste0("results/Simulation_smaller/5/K",
-#                     k, "/", "debug_lambda_", i_lambda, ".RData"))
-#         rev(l_debug$ll_params)[[1]]$diff
-#       })
-#   })
-# diff %>% 
-#   purrr::map(~ .x %>% 
-#                purrr::map_dbl(4))
-# load("results/Simulation_smaller/5/K3/debug_lambda_2.RData")
-# l_debug$ll_params %>% length()
-# e_asums <- rev(l_debug$ll_easums)[[1]]
-# load("results/Simulation_smaller/5/CV_folds.RData")
-# data <- tb_job$x_samples[[5]][CV_folds != 3, ]
-# fit_sigmas <- SparseDOSSA2:::get_sigmas(x = data, 
-#                                         eloga2 = e_asums[, "eloga2"], 
-#                                         eloga = e_asums[, "eloga"], 
-#                                         mu = l_debug$ll_params[[1]]$mu)
-# params <- rev(l_debug$ll_params)[[2]]
-# control <- do.call(control_integrate, list())
-# attach(params)
+# for(i_dataset in c("vaginal", "stool")) {
+#   
+#   p <- seq_len(nrow(tb_result_top_CV)) %>%
+#     purrr::map_dfr(function(i_row) {
+#       tibble::tibble(i_job = tb_result_top_CV$i_job[i_row],
+#                      a_param = tb_result_top_CV$params_sim[[i_row]]$mu,
+#                      a_fit_param = tb_result_top_CV$params_fit[[i_row]]$mu)
+#     }) %>%
+#     dplyr::left_join(tb_result_top_CV, by = "i_job") %>%
+#     dplyr::filter(dataset == i_dataset) %>%
+#     ggplot(aes(x = a_param, y = a_fit_param, color = as.character(R))) +
+#     geom_point() +
+#     geom_abline(intercept = 0, slope = 1) +
+#     ggpubr::stat_cor() +
+#     facet_wrap(~ i_params + penalize_method + n, ncol = 6) +
+#     coord_fixed() +
+#     ggtitle(paste0(i_dataset, " a_mu"))
+#   print(p)
+#   
+#   p <- seq_len(nrow(tb_result_top_CV)) %>%
+#     purrr::map_dfr(function(i_row) {
+#       tibble::tibble(i_job = tb_result_top_CV$i_job[i_row],
+#                      a_param = tb_result_top_CV$params_sim[[i_row]]$sigma,
+#                      a_fit_param = tb_result_top_CV$params_fit[[i_row]]$sigma)
+#     }) %>%
+#     dplyr::left_join(tb_result_top_CV, by = "i_job") %>%
+#     dplyr::filter(dataset == i_dataset) %>%
+#     ggplot(aes(x = a_param, y = a_fit_param, color = as.character(R))) +
+#     geom_point() +
+#     geom_abline(intercept = 0, slope = 1) +
+#     ggpubr::stat_cor() +
+#     facet_wrap(~ i_params + n, ncol = 3) +
+#     facet_wrap(~ i_params + penalize_method + n, ncol = 6) +
+#     coord_fixed() +
+#     ggtitle(paste0(i_dataset, " a_sigma"))
+#   print(p)
+#   # 
+#   n_feature <- tb_result_top_CV %>% 
+#     dplyr::filter(dataset == i_dataset) %>% 
+#     extract2("params_fit") %>% 
+#     {length(.[[1]]$pi0)}
+#   features_subset <- sample.int((n_feature - 1) * (n_feature - 2) / 2, size = 1000)
+#   p <- seq_len(nrow(tb_result_top_CV)) %>%
+#     purrr::map_dfr(function(i_row) {
+#       tibble::tibble(i_job = tb_result_top_CV$i_job[i_row],
+#                      a_param = tb_result_top_CV$params_sim[[i_row]]$Omega %>% lower_tri() %>% {.[features_subset]},
+#                      a_fit_param = tb_result_top_CV$params_fit[[i_row]]$Omega %>% lower_tri() %>% {.[features_subset]})
+#     }) %>%
+#     dplyr::left_join(tb_result_top_CV, by = "i_job") %>%
+#     dplyr::filter(dataset == i_dataset) %>%
+#     ggplot(aes(x = a_param, y = a_fit_param, color = as.character(R))) +
+#     geom_point() +
+#     geom_abline(intercept = 0, slope = 1) +
+#     ggpubr::stat_cor() +
+#     facet_wrap(~ i_params + penalize_method + n, ncol = 6) +
+#     coord_fixed() +
+#     ggtitle(paste0(i_dataset, " a_Omega"))
+#   print(p)
+# }
 ```

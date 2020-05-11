@@ -1,0 +1,47 @@
+---
+title: "Compare implementations"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+knitr::opts_chunk$set(echo=FALSE)
+library(magrittr)
+library(ggplot2)
+```
+
+```{r load data, include = FALSE}
+smar::sourceDir("SparseDOSSA2/R/")
+
+dir_output <- "/n/janson_lab/lab/sma/sparsedossa_update/results/Test_in_one_fit/"
+dir.create(dir_output, recursive = TRUE, showWarnings = TRUE)
+
+load("results/tmp/Simulation_smaller2/2020_05_03/46/debug_lambda_3.RData")
+load("results/tmp/Simulation_smaller2/2020_05_03/tb_job.RData")
+i_tb_job <- tb_job %>% 
+  dplyr::filter(i_job == 46)
+i_dataset <- i_tb_job$x_samples[[1]]
+```
+
+```{r examine results}
+ll_params <- l_debug$ll_params
+future::plan(future::multisession())
+system.time(l_params_x <- 
+  future.apply::future_lapply(
+    seq_along(ll_params),
+    function(i)
+      params_a_to_x(params_a = ll_params[[i]], n = 100000)))
+save(l_params_x, file = paste0(dir_output, "l_params_x.RData"))
+```
+
+```{r swap in old copulasso method}
+future::plan(list(future::sequential, future::multisession))
+fit_EM <- EM_diagnose(
+  data = i_dataset,
+  lambdas = i_tb_job$lambdas[[1]][3],
+  control = list(
+    abs_tol = 1e-3,
+    rel_tol = 1e-1,
+    maxit = 30,
+    verbose = TRUE,
+    debug_dir = dir_output))
+```

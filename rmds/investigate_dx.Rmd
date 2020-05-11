@@ -47,7 +47,7 @@ library(ggplot2)
       $\int_{- \inf}^{F^{-1}_{G_1}(\pi_{01})} f_G(g_1, g_2(\log a_2)) d g_1 
        \propto f_G(g_1^*, g_2(\log a_2))$
        
-## Unit testing
+## Compare against approximation
 
   * Want to ensure that new implementation is correct (generates proper density)
   
@@ -81,24 +81,44 @@ log_asums <- seq(-5, 5, by = 0.5)
 d1s <- sapply(1:nrow(x_samples),
               function(i_sample) {
                 sapply(log_asums, function(i_logasum)
-                  dloga(a = a(x = x_samples[i_sample, ],
-                              asum = exp(i_logasum)),
-                        pi0 = params$pi0, 
-                        mu = params$mu,
-                        sigma = params$sigma,
-                        Sigma = params$Sigma,
-                        Omega = params$Omega)) 
+                  dloga_true(a = a(x = x_samples[i_sample, ],
+                                   asum = exp(i_logasum)),
+                             pi0 = params$pi0, 
+                             mu = params$mu,
+                             sigma = params$sigma,
+                             Sigma = params$Sigma,
+                             Omega = params$Omega)) 
               })
-d2s <- sapply(1:nrow(x_samples),
-              function(i_sample) {
-                sapply(log_asums, function(i_logasum)
-                  dloga_old(a = a(x = x_samples[i_sample, ],
-                                  asum = exp(i_logasum)),
-                            pi0 = params$pi0, 
-                            mu = params$mu,
-                            sigma = params$sigma,
-                            Omega = params$Omega))
-              })
+d2s_forInt <- future.apply::future_sapply(
+  1:nrow(x_samples),
+  function(i_sample) {
+    m_cond <- mloga(a = x_samples[i_sample, ],
+                    pi0 = params$pi0,
+                    mu = params$mu,
+                    sigma = params$sigma,
+                    Sigma = params$Sigma)
+    sapply(
+      log_asums, 
+      function(i_logasum)
+        dloga_forInt(a = a(x = x_samples[i_sample, ],
+                           asum = exp(i_logasum)),
+                     pi0 = params$pi0, 
+                     mu = params$mu,
+                     sigma = params$sigma,
+                     Sigma = params$Sigma,
+                     Omega = params$Omega,
+                     mean_cond = m_cond$mean_cond,
+                     Sigma_cond = m_cond$Sigma_cond))
+  })
+p2s <- sapply(1:nrow(x_samples),
+              function(i_sample)
+                ploga(a = x_samples[i_sample, ],
+                      pi0 = params$pi0, 
+                      mu = params$mu,
+                      sigma = params$sigma,
+                      Sigma = params$Sigma))
+d2s <- t(t(d2s_forInt) + p2s)
+
 colnames(d1s) <- colnames(d2s) <- paste0("Sample", 1:5)
 rbind(data.frame(log_asum = log_asums,
                  d1s,
@@ -114,7 +134,7 @@ rbind(data.frame(log_asum = log_asums,
              color = method)) +
   geom_point() +
   geom_line() +
-  facet_grid(.~Sample)
+  facet_wrap(~Sample, scales = "free_y")
 
 
 # compare dloga, fixing as
@@ -128,37 +148,80 @@ l_params <- tb_params$i_job %>%
     load(paste0("results/Stool_vaginal/fit_", .x, ".RData"))
     fit_EM$l_fits_full[[1]]$fit
   })
-d1s_params <- sapply(1:nrow(a_samples),
-                     function(i_sample) {
-                       sapply(l_params, function(i_params)
-                         dloga(a = a_samples[i_sample, ],
-                               pi0 = params$pi0, 
-                               mu = params$mu,
-                               sigma = params$sigma,
-                               Sigma = i_params$Sigma[params_subset, 
-                                                      params_subset],
-                               Omega = solve(i_params$Sigma[params_subset, 
-                                                            params_subset]))) 
-                     })
-d2s_params <- sapply(1:nrow(a_samples),
-                     function(i_sample) {
-                       sapply(l_params, function(i_params)
-                         dloga_old(a = a_samples[i_sample, ],
-                                   pi0 = params$pi0, 
-                                   mu = params$mu,
-                                   sigma = params$sigma,
-                                   Omega = solve(i_params$Sigma[params_subset, 
-                                                                params_subset])))
-                     })
-
-colnames(d1s_params) <- colnames(d2s_params) <- paste0("Sample", 1:5)
+d1s <- sapply(1,
+              function(i_sample) {
+                sapply(l_params, function(i_params)
+                  dloga_true(a = a_samples[i_sample, ],
+                             pi0 = params$pi0, 
+                             mu = params$mu,
+                             sigma = params$sigma,
+                             Sigma = i_params$Sigma[params_subset, 
+                                                    params_subset],
+                             Omega = solve(i_params$Sigma[params_subset, 
+                                                          params_subset]))) 
+              })
+l_m_cond <- lapply(
+  1:nrow(a_samples),
+  function(i_sample) {
+    future.apply::future_lapply(
+      l_params,
+      function(i_params) {
+        mloga(
+          a = a_samples[i_sample, ],
+          pi0 = params$pi0, 
+          mu = params$mu,
+          sigma = params$sigma,
+          Sigma = i_params$Sigma[params_subset, 
+                                 params_subset]
+        )
+      })
+  })
+d2s_forInt <- sapply(
+  1,
+  function(i_sample) {
+    future.apply::future_sapply(
+      l_params, 
+      function(i_params) {
+        m_cond <- mloga(
+          a = a_samples[i_sample, ],
+          pi0 = params$pi0, 
+          mu = params$mu,
+          sigma = params$sigma,
+          Sigma = i_params$Sigma[params_subset, 
+                                 params_subset]
+        )
+        dloga_forInt(
+          a = a_samples[i_sample, ],
+          pi0 = params$pi0, 
+          mu = params$mu,
+          sigma = params$sigma,
+          Sigma = i_params$Sigma[params_subset, 
+                                 params_subset],
+          Omega = solve(i_params$Sigma[params_subset, 
+                                       params_subset]),
+          mean_cond = m_cond$mean_cond,
+          Sigma_cond = m_cond$Sigma_cond)
+      })
+  })
+p2s <- sapply(1,
+              function(i_sample) {
+                sapply(l_params, function(i_params)
+                  ploga(a = a_samples[i_sample, ],
+                        pi0 = params$pi0, 
+                        mu = params$mu,
+                        sigma = params$sigma,
+                        Sigma = i_params$Sigma[params_subset, 
+                                               params_subset])) 
+              })
+d2s <- d2s_forInt + p2s
+colnames(d1s) <- colnames(d2s) <- paste0("Sample", 1)
 rbind(data.frame(lambdas = tb_params$lambdas,
-                 d1s_params,
+                 d1s,
                  method = "Original"),
       data.frame(lambdas = tb_params$lambdas,
-                 d2s_params,
+                 d2s,
                  method = "Approximate")) %>% 
-  tidyr::pivot_longer(cols = Sample1:Sample5,
+  tidyr::pivot_longer(cols = Sample1,
                       names_to = "Sample",
                       values_to = "logLik") %>% 
   ggplot(aes(x = log10(lambdas),
@@ -167,4 +230,154 @@ rbind(data.frame(lambdas = tb_params$lambdas,
   geom_point() +
   geom_line() +
   facet_grid(.~Sample)
+```
+
+```{r test}
+ds <- sapply(log_asums, function(i_logasum)
+  dloga_true(a = a(x = x_samples[1, ],
+                   asum = exp(i_logasum)),
+             pi0 = params$pi0, 
+             mu = params$mu,
+             sigma = params$sigma,
+             Sigma = params$Sigma,
+             Omega = params$Omega)) 
+coef_lm <- lm(ds ~ log_asums + I(log_asums^2))$coef
+mu <- - coef_lm[2] / coef_lm[3] / 2
+sigma <- sqrt(- 1 / coef_lm[3] / 2)
+system.time(
+  test <- integrate(
+    f = function(x) 
+      sapply(x, function(xx) 
+        dloga_true(a = a(x = x_samples[1, ],
+                         asum = exp(xx)),
+                   pi0 = params$pi0,
+                   mu = params$mu,
+                   sigma = params$sigma,
+                   Sigma = params$Sigma,
+                   Omega = params$Omega,
+                   log.p = FALSE)),
+    lower = mu - sigma * 3,
+    upper = mu + sigma * 3,
+    rel.tol = 1e-3,
+    abs.tol = 0
+  ))
+
+time1 <- system.time(
+  test1 <- integrate(
+    f = function(x) 
+      sapply(x, function(xx) 
+        dloga_true(a = a(x = x_samples[1, ],
+                         asum = exp(xx)),
+                   pi0 = params$pi0,
+                   mu = params$mu,
+                   sigma = params$sigma,
+                   Sigma = params$Sigma,
+                   Omega = params$Omega,
+                   log.p = FALSE)),
+    lower = mu - 3 * sigma,
+    upper = mu + 3 * sigma,
+    rel.tol = 1e-3,
+    abs.tol = 0
+  ))
+
+time0 <- system.time(
+  test0 <- cubature::hcubature(
+    f = function(x) 
+      sapply(x, function(xx) 
+        dloga_true(a = a(x = x_samples[1, ],
+                         asum = exp(xx)),
+                   pi0 = params$pi0,
+                   mu = params$mu,
+                   sigma = params$sigma,
+                   Sigma = params$Sigma,
+                   Omega = params$Omega,
+                   log.p = FALSE)),
+    lowerLimit = mu - 4 * sigma,
+    upperLimit = mu + 4 * sigma,
+    tol = 1e-3,
+    absError = 0,
+    maxEval = 10
+  ))
+
+time1 <- system.time(
+  test1 <- cubature::hcubature(
+    f = function(x) 
+      sapply(x, function(xx) 
+        dloga_true(a = a(x = x_samples[1, ],
+                         asum = exp(xx)),
+                   pi0 = params$pi0,
+                   mu = params$mu,
+                   sigma = params$sigma,
+                   Sigma = params$Sigma,
+                   Omega = params$Omega,
+                   log.p = FALSE)),
+    lowerLimit = mu - 4 * sigma,
+    upperLimit = mu + 4 * sigma,
+    tol = 1e-3,
+    absError = 0,
+    maxEval = 30
+  ))
+
+time2 <- system.time(
+  test2 <- cubature::hcubature(
+    f = function(x) 
+      sapply(x, function(xx) 
+        dloga_true(a = a(x = x_samples[1, ],
+                         asum = exp(xx)),
+                   pi0 = params$pi0,
+                   mu = params$mu,
+                   sigma = params$sigma,
+                   Sigma = params$Sigma,
+                   Omega = params$Omega,
+                   log.p = FALSE)),
+    lowerLimit = mu - 4 * sigma,
+    upperLimit = mu + 4 * sigma,
+    tol = 1e-3,
+    absError = 0,
+    maxEval = 100
+  ))
+
+time3 <- system.time(
+  test3 <- integrate(
+    f = function(x) 
+      sapply(x, function(xx) 
+        dloga_true(a = a(x = x_samples[1, ],
+                         asum = exp(xx)),
+                   pi0 = params$pi0,
+                   mu = params$mu,
+                   sigma = params$sigma,
+                   Sigma = params$Sigma,
+                   Omega = params$Omega,
+                   log.p = FALSE)),
+    lower = mu - 4 * sigma,
+    upper = mu + 4 * sigma,
+    rel.tol = 1e-3,
+    abs.tol = 0
+  ))
+
+time2 <- system.time(
+  test2 <- cubature::hcubature(
+    f = function(x) 
+      sapply(x, function(xx) 
+        dloga_true(a = a(x = x_samples[1, ],
+                         asum = exp(xx)),
+                   pi0 = params$pi0,
+                   mu = params$mu,
+                   sigma = params$sigma,
+                   Sigma = params$Sigma,
+                   Omega = params$Omega,
+                   log.p = FALSE)),
+    lowerLimit = mu - 3 * sigma,
+    upperLimit = mu + 3 * sigma,
+    tol = 1e-3,
+    absError = 0,
+    maxEval = 100
+  ))
+
+offset <- dloga_true(a = a(x = x_samples[1, ],
+                           asum = exp(mu)),
+                     pi0 = params$pi0,
+                     mu = params$mu,
+                     sigma = params$sigma,
+                     )
 ```

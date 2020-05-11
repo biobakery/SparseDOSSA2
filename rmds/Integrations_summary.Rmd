@@ -1,0 +1,97 @@
+---
+title: "Numeric integrations"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+knitr::opts_chunk$set(echo=FALSE)
+library(magrittr)
+library(ggplot2)
+```
+
+```{r load data, cache=TRUE, include=FALSE}
+smar::sourceDir("SparseDOSSA2/R/")
+dir_output <- "results/integrations/"
+load(paste0(dir_output, "tb_job.RData"))
+tb_job <- tb_job %>% 
+  dplyr::group_by(i_job) %>% 
+  dplyr::mutate(l_integrations =
+                  {
+                    load(paste0(dir_output, "fit_", i_job, ".RData"))
+                    list(fit_integrate)
+                  })
+tb_job <- tb_job %>% 
+  dplyr::mutate(integral =
+                  l_integrations %>% 
+                  purrr::map_dbl("integral"),
+                abs_error =
+                  l_integrations %>% 
+                  purrr::map_dbl("error"),
+                n_eval =
+                  l_integrations %>% 
+                  purrr::map_dbl("neval")) %>% 
+  dplyr::mutate(rel_error = abs_error / integral)
+```
+
+$f_{\log A_s, X}$ as a function of $a_s$ takes roughly a bell shape. Two issues:
+
+1. How to integrate (i.e. where to evaluate the function)? 
+
+2. how to choose integration limits?
+
+``` {r normal curve}
+plot(seq(-5, 5, by = 0.2), dnorm(seq(-5, 5, by = 0.2)))
+```
+
+Three integration approaches:
+
+* Adaptive Gaussian quadrature, implemented in 
+  [`cubature`](https://github.com/stevengj/cubature)
+    
+    * 15 fixed knots, exact evaluation of polynomials up to 29 degrees
+    
+    * Adaptively sub-divide regions to improve estimation
+    
+    * Knots are not re-used
+    
+* Clenshaw–Curtis quadrature, also implemented in 
+  [`cubature`](https://github.com/stevengj/cubature)
+  
+    * Adaptively doubles the number of knots to improve estimation
+    
+    * Knots are re-used
+  
+* Use cubic spline for approximating the curve + integration
+
+    * Errors for each segment can be estimated by monotonicity
+  
+    * Adaptively add knots to regions with largest error estimation to improve
+    estimation
+    
+    * Knots are re-used
+  
+For integration limits, fit a rough normal density to the curve based on
+small number of points (~10), then use quantiles (1% and 99%, for example) as
+limits!
+
+```{r plotting, fig.width=15, fig.height=10}
+tb_job %>% 
+  dplyr::filter(i_param <= 5) %>% 
+  ggplot(aes(x = log2(n_eval), y = integral, color = method,
+             shape = as.factor(limit_tol))) +
+  geom_point(size = 3) +
+  geom_line() +
+  facet_wrap(~ i_sample + i_param, scales = "free_y",
+             ncol = 5) +
+  ggtitle("Integrals")
+
+tb_job %>% 
+  dplyr::filter(i_param <= 5) %>% 
+  ggplot(aes(x = log2(n_eval), y = log10(rel_error), color = method,
+             shape = as.factor(limit_tol))) +
+  geom_point(size = 3) +
+  geom_line() +
+  facet_wrap(~ i_sample + i_param, scales = "free_y",
+             ncol = 5)
+```

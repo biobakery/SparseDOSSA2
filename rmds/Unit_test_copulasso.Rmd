@@ -1,0 +1,64 @@
+---
+title: "Unit testing copulasso"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+knitr::opts_chunk$set(echo=FALSE)
+library(magrittr)
+library(ggplot2)
+```
+
+* Previously, esitmate the feature-feature correlation $\Omega$ with 
+  graphical lasso: optimize $\text{tr}(\Omega \hat{P}) + \lambda ||\Omega||_1$, 
+  where $\hat{P}_{ij}$, the sample Pearson correlation between $g$ variables, 
+  is estimated as
+  $f(\hat{S}_{ij})$, where $\hat{S}_{ij}$ is the sample spearman correlation of
+  $a$ variables.
+
+* Motivation: $g_i \rightarrow a_i$ monotonically, so spearman correlation on $a$
+  is the same as spearman correlation on $g$
+  
+* However, not completely true, as smaller $g$'s gets mapped to the zero spike 
+  in $a$
+  
+* Instead, propose alternative parameter: $P^*_{ij} = \text{cor}(g_i^*, g_j^*)$,
+  where $g_i^*$ is the same as $g_i$, but with those in the zero-spike region being
+  replaced by some constant (can be fixed by ensuring $E g_i^* = 0$).
+  
+* $P^*_{ij}$ is a monotonic function of $P_{ij}$; it also has an easy sample estimator,
+  making MM estimation straightforward.
+  
+```{r simple case testing}
+smar::sourceDir("SparseDOSSA2/R/")
+pi0 <- rep(0.95, 2)
+glim <- qnorm(pi0)
+g0 <- truncnorm::etruncnorm(b = glim)
+sigmaMod <- sqrt(pi0 * g0^2 + 
+                   (1 - pi0) * 
+                   (truncnorm::vtruncnorm(a = glim) + 
+                      truncnorm::etruncnorm(a = glim)^2))
+Ps <- seq(-0.99, 0.99, by = 0.01)
+Ps_star <- sapply(Ps,
+                    function(P)
+                      Rho2(rho_p = P,
+                           pi0_1 = pi0[1], pi0_2 = pi0[2],
+                           glim_1 = glim[1], glim_2 = glim[2],
+                           g0_1 = g0[1], g0_2 = g0[2],
+                           sigmaMod_1 = sigmaMod[1], 
+                           sigmaMod_2 = sigmaMod[2]))
+plot(Ps, Ps_star)
+abline(0, 1)
+
+Ps_solve <- sapply(Ps_star, 
+                   function(P_star)
+                   iRho3(rho_s = P_star,
+                         pi0_1 = pi0[1], pi0_2 = pi0[2],
+                         glim_1 = glim[1], glim_2 = glim[2],
+                         g0_1 = g0[1], g0_2 = g0[2],
+                         sigmaMod_1 = sigmaMod[1], 
+                         sigmaMod_2 = sigmaMod[2]))
+plot(Ps, Ps_solve)
+abline(0, 1)
+```

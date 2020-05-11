@@ -1,0 +1,220 @@
+---
+title: "Are we modelling feature-feature correlation well?"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+knitr::opts_chunk$set(echo=FALSE)
+library(magrittr)
+library(ggplot2)
+```
+
+
+```{r setup2, include=FALSE}
+dir_output <- "/n/janson_lab/lab/sma/sparsedossa_update/results/Simulation_smaller/"
+smar::sourceDir("SparseDOSSA2/R/")
+```
+
+## Does CV pick the best model, especially for sparse scenarios?
+
+* Induced feature-feature correlation differ wrt sparsity in $\Omega$, and does not necessary agree with CV logLik
+
+```{r compare positive and negative results, fig.width=20, fig.height=10}
+load(paste0(dir_output, "tb_result_formatted.RData"))
+tb_result_compare1 <- tb_result_formatted %>%
+  dplyr::filter(sparsity > 0.5, penalize_method == "huge") %>% 
+  dplyr::group_by(i_job) %>%
+  dplyr::arrange(-logLik_CV) %>%
+  dplyr::slice(1) %>% 
+  dplyr::mutate(params_fit_x = {
+    load(paste0(dir_output,
+                "params_fit_x_", i_job, ".RData"))
+    list(params_fit_x)
+  }) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(i_lambda = "opt_lambda")
+tb_result_compare2 <- tb_result_formatted %>%
+  dplyr::filter(sparsity > 0.5, penalize_method == "huge") %>% 
+  dplyr::group_by(i_job) %>%
+  dplyr::arrange(-lambda_fit) %>%
+  dplyr::slice(1) %>% 
+  dplyr::mutate(params_fit_x = {
+    load(paste0(dir_output,
+                "params_fit_x_", i_job, "_negControl.RData"))
+    list(params_fit_x)
+  }) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(i_lambda = "max_lambda")
+tb_result_compare <- rbind(tb_result_compare1, tb_result_compare2)
+
+set.seed(1)
+tb_feature_subset <- tb_result_formatted %>% 
+  dplyr::filter(!duplicated(dataset)) %>% 
+  dplyr::mutate(l_feature_subset = params_sim %>% 
+                  purrr::map(
+                    ~ {
+                      n_feature = length(.x$pi0)
+                      sample.int((n_feature - 1) * (n_feature - 2) / 2, size = 2500)
+                    }
+                  )) %>% 
+  dplyr::select(dataset, l_feature_subset)
+
+p <- seq_len(nrow(tb_result_compare)) %>%
+  purrr::map_dfr(function(i_row) {
+    tibble::tibble(i_job = tb_result_compare$i_job[i_row],
+                   i_lambda = tb_result_compare$i_lambda[i_row],
+                   x_param = tb_result_compare$params_sim_x[[i_row]]$Corr %>% lower_tri() %>% 
+                     {.[tb_feature_subset$l_feature_subset[tb_feature_subset$dataset == tb_result_compare$dataset[i_row]][[1]]]},
+                   x_fit_param = tb_result_compare$params_fit_x[[i_row]]$Corr %>% lower_tri() %>% 
+                     {.[tb_feature_subset$l_feature_subset[tb_feature_subset$dataset == tb_result_compare$dataset[i_row]][[1]]]})
+  }) %>%
+  dplyr::left_join(tb_result_compare, by = c("i_job", "i_lambda")) %>%
+  ggplot(aes(x = x_param, y = x_fit_param, color = as.character(R))) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  ggpubr::stat_cor() +
+  facet_wrap(~ dataset + n + i_lambda, ncol = 6) +
+  coord_fixed() +
+  ggtitle(" x_Corr")
+print(p)
+```
+
+## Fitting of marginals of $A$ does not seem to be affected by $\Omega$, but by $X$ marginals + compositionality
+
+* Marginal parameter estimations are comparable, even with the most sparse model
+
+```{r compare positive and negative results for sigma, fig.width=20, fig.height=10}
+p <- seq_len(nrow(tb_result_compare)) %>%
+  purrr::map_dfr(function(i_row) {
+    tibble::tibble(i_job = tb_result_compare$i_job[i_row],
+                   i_lambda = tb_result_compare$i_lambda[i_row],
+                   x_param = tb_result_compare$params_sim_x[[i_row]]$mu,
+                   x_fit_param = tb_result_compare$params_fit_x[[i_row]]$mu)
+  }) %>%
+  dplyr::left_join(tb_result_compare, by = c("i_job", "i_lambda")) %>%
+  ggplot(aes(x = x_param, y = x_fit_param, color = as.character(R))) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  ggpubr::stat_cor() +
+  facet_grid(dataset ~ n + i_lambda, scales = "free_y") +
+  ggtitle(" x_sigma")
+print(p)
+# p <- seq_len(nrow(tb_result_compare)) %>%
+#   purrr::map_dfr(function(i_row) {
+#     tibble::tibble(i_job = tb_result_compare$i_job[i_row],
+#                    i_lambda = tb_result_compare$i_lambda[i_row],
+#                    a_param = tb_result_compare$params_sim[[i_row]]$sigma,
+#                    a_fit_param = tb_result_compare$params_fit[[i_row]]$sigma)
+#   }) %>%
+#   dplyr::left_join(tb_result_compare, by = c("i_job", "i_lambda")) %>%
+#   ggplot(aes(x = a_param, y = a_fit_param, color = as.character(R))) +
+#   geom_point() +
+#   geom_abline(intercept = 0, slope = 1) +
+#   ggpubr::stat_cor() +
+#   facet_wrap(~ dataset + i_lambda, ncol = 2) +
+#   coord_fixed() +
+#   ggtitle(" a_sigma")
+# print(p)
+p <- seq_len(nrow(tb_result_compare)) %>%
+  purrr::map_dfr(function(i_row) {
+    tibble::tibble(i_job = tb_result_compare$i_job[i_row],
+                   i_lambda = tb_result_compare$i_lambda[i_row],
+                   a_fit_param = tb_result_compare$params_fit[[i_row]]$sigma,
+                   i_feature = seq_along(a_fit_param))
+  }) %>%
+  dplyr::left_join(tb_result_compare, by = c("i_job", "i_lambda")) %>%
+  tidyr::pivot_wider(id_cols = c(i_job, i_feature, R, dataset, n), names_from = i_lambda, values_from = a_fit_param) %>% 
+  ggplot(aes(x = opt_lambda, y = max_lambda, color = as.character(R))) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  ggpubr::stat_cor() +
+  facet_grid(dataset ~ n, scales = "free_y") +
+  ggtitle(" a_sigma")
+print(p)
+```
+
+Note that
+
+* $\text{E}\text{log}(a_j / a^\Sigma) = \text{E}\text{log} a_j - \text{E}\text{log} a^\Sigma$
+
+* $\text{Var}\text{log}(a_j / a^\Sigma) = \text{Var}\text{log} a_j + \text{Var}\text{log} a^\Sigma$, if $\text{Cov}(\text{log} a_j, \text{log} a^\Sigma) \approx 0$
+
+```{r more variance thoughts}
+tb_result_compare_tmp <- tb_result_compare %>% 
+  dplyr::filter(n == 400, dataset == "vaginal", R == 1)
+samples_a1 <- rcopulasso(n = 10000, 
+                         pi0 = tb_result_compare_tmp$params_fit[[1]]$pi0,
+                         mu = tb_result_compare_tmp$params_fit[[1]]$mu,
+                         sigma = tb_result_compare_tmp$params_fit[[1]]$sigma,
+                         Omega = tb_result_compare_tmp$params_fit[[1]]$Omega)
+samples_a2 <- rcopulasso(n = 10000, 
+                         pi0 = tb_result_compare_tmp$params_fit[[2]]$pi0,
+                         mu = tb_result_compare_tmp$params_fit[[2]]$mu,
+                         sigma = tb_result_compare_tmp$params_fit[[2]]$sigma,
+                         Omega = tb_result_compare_tmp$params_fit[[2]]$Omega)
+hist(log10(apply(samples_a1, 1, sum)), breaks = 30)
+hist(log10(apply(samples_a2, 1, sum)), breaks = 30)
+plot(tb_result_compare_tmp$params_fit[[1]]$sigma^2, tb_result_compare_tmp$params_fit_x[[1]]$sigma^2)
+abline(var(log(apply(samples_a1, 1, sum))), 1)
+plot(tb_result_compare_tmp$params_fit[[2]]$sigma^2, tb_result_compare_tmp$params_fit_x[[2]]$sigma^2)
+abline(var(log(apply(samples_a2, 1, sum))), 1)
+```
+
+## Potential cause: bad likelihood approximation?
+
+Our evaluated $\tilde{f}$ is only a (poor) approximation for $f$, the true density
+
+* $\int_{g_1 < c} f_{g}(g_1, g_2 | \Omega) \propto f_{g}(g^*_1, g_2) = \tilde{f}$; $g^*_1 = F^{-1}_{g_1}(\frac{1}{2} F_{g_1}(c))$
+
+* No reason why this would pick the optimal fit with CV.
+
+* logLik_trueParam > logLik_CV_opt > logLik_CV_sparse
+
+```{r examine logLik}
+load(paste0(dir_output, "tb_job.RData"))
+tb_trueLogLik <- tb_job %>%
+  dplyr::filter(i_job %in% tb_result_compare$i_job) %>% 
+  dplyr::filter(n == 400)
+# l_logLik <- list()
+# for(i_row in seq_len(nrow(tb_trueLogLik))) {
+#   print(i_row)
+#   data <- tb_trueLogLik$x_samples[[i_row]]
+#   params <- tb_trueLogLik$params_sim[[i_row]]
+#   logLik <- future.apply::future_sapply(
+#     seq_len(nrow(data)),
+#     function(i_sample)
+#       dx(x = data[i_sample, ],
+#          pi0 = params$pi0, 
+#          mu = params$mu, 
+#          sigma = params$sigma, 
+#          Omega = params$Omega,
+#          log.p = TRUE)
+#   )
+#   l_logLik[[i_row]] <- mean(logLik)
+# }
+# save(l_logLik, file = paste0(dir_output, file = "l_logLik_trueParam.RData"))
+load(paste0(dir_output, file = "l_logLik_trueParam.RData"))
+tb_trueLogLik <- tb_trueLogLik %>%
+  dplyr::mutate(logLik_trueParam = unlist(l_logLik)) %>%
+  dplyr::select(i_job, logLik_trueParam)
+tb_plot <- tb_result_compare %>% 
+  dplyr::filter(n == 400) %>% 
+  dplyr::left_join(tb_trueLogLik, by = "i_job") %>% 
+  tidyr::pivot_longer(names_to = "Class", values_to = "logLik_value", cols = c(logLik_CV, logLik_trueParam)) %>% 
+  dplyr::mutate(Class = dplyr::case_when(
+    Class == "logLik_trueParam" ~ "trueParam",
+    i_lambda == "opt_lambda" ~ "CV_opt_lambda",
+    i_lambda == "max_lambda" ~ "CV_max_lambda"
+  ))
+tb_plot %>% 
+  ggplot(aes(x = Class, y = logLik_value)) +
+  geom_boxplot() +
+  facet_wrap(~dataset, scales = "free_y")
+```
+
+## Directions
+
+* Increase $n$ to investigate convergence?
+
+* Accurate likelihood (computation difficulties)?

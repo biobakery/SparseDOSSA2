@@ -64,35 +64,70 @@ enforce_corr <- function(x) {
   return(x_out)
 }
 
-a_to_u <- function(a, pi0, mu, sigma, 
+a_to_u <- function(a, pi0, mu, sigma,
                    half_pi0 = FALSE) {
   if(half_pi0)
     to_return <-  pi0 / 2
   else
     to_return <-  pi0
-  if(any(a > 0)) ##FIXME
-    to_return[a > 0] <- 
-      pi0[a > 0] + 
-      pnorm(log(a[a > 0]), 
-            mean = mu[a > 0], 
-            sd = sigma[a > 0]) * 
-      (1 - pi0[a > 0])
+
+  ind_nonzero <- a > 0
+  if(any(ind_nonzero)) ##FIXME
+    to_return[ind_nonzero] <-
+      pi0[ind_nonzero] +
+      pnorm(log(a[ind_nonzero]),
+            mean = mu[ind_nonzero],
+            sd = sigma[ind_nonzero]) *
+      (1 - pi0[ind_nonzero])
+
+  return(to_return)
+}
+
+a_to_u2 <- function(a, pi0, mu, sigma,
+                    half_pi0 = FALSE,
+                    u_tol =  1e-5) {
+  if(half_pi0)
+    to_return <-  rep(pi0 / 2,
+                      length = length(a))
+  else
+    to_return <-  rep(pi0,
+                      length = length(a))
+  
+  ind_nonzero <- a > 0
+  if(any(ind_nonzero)) ##FIXME
+    to_return[ind_nonzero] <-
+    pi0 +
+    pnorm(log(a[ind_nonzero]),
+          mean = mu,
+          sd = sigma) *
+    (1 - u_tol) *
+    (1 - pi0)
   
   return(to_return)
 }
 
-a_to_u_old <- function(a, pi0, mu, sigma) {
-  to_return <-  pi0 / 2
-  if(any(a > 0)) ##FIXME
-    to_return[a > 0] <- 
-      pi0[a > 0] + 
-      pnorm(log(a[a > 0]), 
-            mean = mu[a > 0], 
-            sd = sigma[a > 0]) * 
-      (1 - pi0[a > 0])
+a_to_g <- function(a, pi0, mu, sigma) {
+  ind_nonzero <- a > 0
+  
+  to_return <- u <- a_to_u2(a, pi0, mu, sigma)
+  to_return[ind_nonzero] <- qnorm(u[ind_nonzero])
+  to_return[!ind_nonzero] <- - mean(to_return[ind_nonzero]) * (1 - pi0) / pi0
   
   return(to_return)
 }
+# 
+# a_to_u_old <- function(a, pi0, mu, sigma) {
+#   to_return <-  pi0 / 2
+#   if(any(a > 0)) ##FIXME
+#     to_return[a > 0] <- 
+#       pi0[a > 0] + 
+#       pnorm(log(a[a > 0]), 
+#             mean = mu[a > 0], 
+#             sd = sigma[a > 0]) * 
+#       (1 - pi0[a > 0])
+#   
+#   return(to_return)
+# }
 
 a <- function(x, asum) {
   a <- x * asum

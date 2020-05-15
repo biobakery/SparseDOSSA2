@@ -11,7 +11,8 @@ copulasso <- function(data, marginals,
                             mu = marginals$mu[i_feature],
                             sigma = marginals$sigma[i_feature]),
                    rep(0.0, nrow(data)))
-  S <- get_s(cor_data = cor(data_g, method = "pearson"),
+  Corr_star <- cor(data_g, method = "pearson")
+  S <- get_s(cor_data = Corr_star,
              pi0 = marginals$pi0,
              glim = marginals$glim,
              g0 = marginals$g0,
@@ -86,6 +87,7 @@ copulasso <- function(data, marginals,
   
   return(list(Omega = Omega,
               Sigma = Sigma,
+              Corr_star = Corr_star,
               copulasso_code = 0))
 }
 

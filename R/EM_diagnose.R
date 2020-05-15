@@ -46,6 +46,7 @@ EM_diagnose <- function(data,
                      sigma = fit_marginals$sigma,
                      Sigma = fit_copulasso$Sigma,
                      Omega = fit_copulasso$Omega,
+                     Corr_star = fit_copulasso$Corr_star,
                      diff = rep(NA_real_, 4),
                      logLik = NA_real_,
                      time = Sys.time())
@@ -110,15 +111,16 @@ EM_diagnose <- function(data,
                            mu = fit_marginals$mu,
                            sigma = fit_sigmas,
                            Sigma = fit_copulasso$Sigma,
-                           Omega = fit_copulasso$Omega)
+                           Omega = fit_copulasso$Omega,
+                           Corr_star = fit_copulasso$Corr_star)
         diff_abs <- vapply(
-          c("sigma", "Sigma"), 
+          c("sigma", "Corr_star"), 
           function(i_param)
             get_diff(params_new[[i_param]], params[[i_param]], 
                      denom_c = control$abs_tol, method = "abs"),
           0.0)
         diff_rel <- vapply(
-          c("sigma", "Sigma"), 
+          c("sigma", "Corr_star"), 
           function(i_param)
             get_diff(params_new[[i_param]], params[[i_param]], 
                      denom_c = control$abs_tol, method = "rel"),

@@ -221,9 +221,13 @@ filter_data <- function(data,
       stop("Max iteration reached!")
     i_iter <- i_iter + 1
     
-    ind_feature_tmp <- apply(data[ind_sample, ind_feature, drop = FALSE] > 0, 2, sum) >= k_feature
+    ind_feature_tmp <- 
+      apply(data[ind_sample, ind_feature, drop = FALSE] > 0, 2, sum) >= 
+      k_feature
     ind_feature[ind_feature] <- ind_feature_tmp
-    ind_sample_tmp <- apply(data[ind_sample, ind_feature, drop = FALSE] > 0, 1, sum) >= k_sample
+    ind_sample_tmp <- 
+      apply(data[ind_sample, ind_feature, drop = FALSE] > 0, 1, sum) >= 
+      k_sample
     ind_sample[ind_sample] <- ind_sample_tmp
     
     if (all(ind_feature_tmp) & all(ind_sample_tmp)) 

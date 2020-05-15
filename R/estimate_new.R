@@ -2,15 +2,15 @@ estimate_featureParam_new <- function(x) {
   ind_nonzero <- x > 0
   if(sum(ind_nonzero) <= 1) ## FIXME
     stop("Does not support features with only one non-zero value or less!")
-  if(all(!ind_nonzero)) ## FIXME
-    stop("Does not support features with all non-zero values!")
-  
-  pi0 <- mean(!ind_nonzero)
-  mu <- mean(log(x[ind_nonzero]))
-  if(sum(ind_nonzero) > 1)
-    sigma <- sd(log(x[ind_nonzero]))
+  # if(all(!ind_nonzero)) ## FIXME
+  #   stop("Does not support features with all non-zero values!")
+  # 
+  if(all(ind_nonzero)) ## FIXME
+    pi0 <- 0.5 / length(x)
   else
-    sigma <- 1 ##FIXME
+    pi0 <- mean(!ind_nonzero)
+  mu <- mean(log(x[ind_nonzero]))
+  sigma <- sd(log(x[ind_nonzero]))
   
   # Additional parameters to help with computation
   glim <- qnorm(pi0)

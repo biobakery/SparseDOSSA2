@@ -231,11 +231,12 @@ EM_diagnose_CV <- function(data,
           future.apply::future_sapply(
             seq_len(nrow(data_testing)),
             function(i_sample) {
-              logLik <- dx(x = data_testing[i_sample, , drop = TRUE],
-                           pi0 = params$pi0, mu = params$mu,
-                           sigma = params$sigma, Omega = params$Omega,
-                           control = control$control_numint,
-                           log.p = TRUE)
+              logLik <- 
+                dx(x = data_testing[i_sample, , drop = TRUE],
+                   pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
+                   Omega = params$Omega, Sigma = params$Sigma,
+                   control = control$control_numint,
+                   log.p = TRUE)
             })
         })
       
@@ -246,13 +247,14 @@ EM_diagnose_CV <- function(data,
   l_results_CV <- future::values(l_results_CV)
   
   # Aggregate CV results
-  logLik_CV <- sapply(seq_along(lambdas),
-                      function(i_lambda) {
-                        logLik <- rep(NA_real_, nrow(data))
-                        for(k in seq_len(K))
-                          logLik[CV_folds == k] <- l_results_CV[[k]]$l_logLik[[i_lambda]]
-                        return(logLik)
-                      })
+  logLik_CV <- 
+    sapply(seq_along(lambdas),
+           function(i_lambda) {
+             logLik <- rep(NA_real_, nrow(data))
+             for(k in seq_len(K))
+               logLik[CV_folds == k] <- l_results_CV[[k]]$l_logLik[[i_lambda]]
+             return(logLik)
+           })
   ll_fits_CV <- lapply(l_results_CV, function(result_k) result_k$l_fits)
   
   return(list(l_fits_full = l_fits_full,

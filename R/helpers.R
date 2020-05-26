@@ -3,14 +3,19 @@ logit <- function(x) log(x) - log(1 - x)
 expit <- function(x) 
   exp(x) / (1 + exp(x))
 
-lower_tri <- function(x, warning = TRUE) {
+TSS <- function(x) {
+  if(all(x == 0)) return(x)
+  return(x / sum(x))
+}
+
+lower_tri <- function(x, warning = FALSE) {
   if(!isSymmetric(x) & warning) 
     warning("x is not symmetric!")
   
   x[lower.tri(x)]
 }
 
-upper_tri <- function(x, warning = TRUE) {
+upper_tri <- function(x, warning = FALSE) {
   if(!isSymmetric(x) & warning) 
     warning("x is not symmetric!")
   

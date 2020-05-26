@@ -1,0 +1,180 @@
+---
+title: "Why does some Stool_vaginal runs finish early without converging"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+knitr::opts_chunk$set(echo=FALSE)
+library(magrittr)
+library(ggplot2)
+```
+
+```{r setup2, include=FALSE}
+# Output dir
+dir_output <- "/n/janson_lab/lab/sma/sparsedossa_update/results/Stool_vaginal/"
+dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+smar::sourceDir("SparseDOSSA2/R/")
+```
+
+```{r setup simulation params}
+tb_job <- rbind(
+  tidyr::expand_grid(
+    lambdas = 10^seq(from = -3, to = 0, length.out = 7)
+  )
+) %>% 
+  tidyr::expand_grid(dataset = c("vaginal", "stool")) %>% 
+  dplyr::mutate(i_job = seq_len(dplyr::n()))
+save(tb_job, file = paste0(dir_output, "tb_job.RData"))
+```
+
+```{r load datasets}
+load("data/physeqs/HMP1II_vaginal.RData")
+load("data/physeqs/HMP1II_stool.RData")
+
+x_samples_vaginal <- physeq_vaginal %>% 
+  smar::otu_table2() %>% 
+  t()
+# first subset to top 200 samples with deepest sequencing depth
+x_samples_vaginal <- 
+  x_samples_vaginal[x_samples_vaginal %>% 
+                      apply(1, sum) %>% 
+                      {order(-.)[1:200]}, ]
+# remove features with at most one non-zero values
+x_samples_vaginal <- 
+  x_samples_vaginal[, (x_samples_vaginal > 0) %>% 
+                      apply(2, sum) %>% 
+                      {. >= 2}]
+# finally subset to top 250 features with largest average relative abundance
+x_samples_vaginal <- 
+  x_samples_vaginal[, x_samples_vaginal %>% 
+                      apply(1, TSS) %>% 
+                      apply(1, mean) %>% 
+                      {order(-.)[1:250]}]
+# set to relative abundance
+x_samples_vaginal <- 
+  x_samples_vaginal %>% 
+  apply(1, TSS) %>% 
+  t()
+
+x_samples_stool <- physeq_stool %>% 
+  smar::otu_table2() %>% 
+  t()
+# first subset to top 200 samples with deepest sequencing depth
+x_samples_stool <- 
+  x_samples_stool[x_samples_stool %>% 
+                      apply(1, sum) %>% 
+                      {order(-.)[1:200]}, ]
+# remove features with at most one non-zero values
+x_samples_stool <- 
+  x_samples_stool[, (x_samples_stool > 0) %>% 
+                      apply(2, sum) %>% 
+                      {. >= 2}]
+# finally subset to top 250 features with largest average relative abundance
+x_samples_stool <- 
+  x_samples_stool[, x_samples_stool %>% 
+                      apply(1, TSS) %>% 
+                      apply(1, mean) %>% 
+                      {order(-.)[1:250]}]
+# set to relative abundance
+x_samples_stool <- 
+  x_samples_stool %>% 
+  apply(1, TSS) %>% 
+  t()
+```
+
+```{r simulation task}
+i_job <- 1
+future::plan(future::multisession)
+i_tb_job <- tb_job[i_job, ]
+if(i_tb_job$dataset == "vaginal")
+  x_samples <- x_samples_vaginal
+if(i_tb_job$dataset == "stool")
+  x_samples <- x_samples_stool
+
+# fit SparseDOSSA
+data = x_samples
+lambdas = i_tb_job$lambdas
+control = list(abs_tol = 5e-3,
+               rel_tol = 1,
+               maxit = 30,
+               verbose = TRUE,
+               debug_dir = paste0(dir_output, i_job, "/"))
+
+control <- do.call(control_EM, control)
+if(!is.null(control$debug_dir))
+  dir.create(control$debug_dir)
+
+# Filtering out features/samples that are all zero
+l_filtering <- filter_data(data)
+data <- data[l_filtering$ind_sample, l_filtering$ind_feature, drop = FALSE]
+
+# Initialize using relative abundances
+fit_marginals <- get_marginals(data)
+
+i_lambda <- 1
+lambda <- lambdas[i_lambda]
+
+load("results/tmp/Stool_vaginal/2020_05_21/1/K0/debug_lambda_1.RData")
+
+# check that e_asums agree in the last step
+e_asums_old <- future.apply::future_vapply(
+  seq_len(nrow(data)),
+  function(i_sample)
+    get_es(x = data[i_sample, , drop = TRUE],
+           pi0 = rev(l_debug$ll_params)[[2]]$pi0, 
+           mu = rev(l_debug$ll_params)[[2]]$mu, 
+           sigma = rev(l_debug$ll_params)[[2]]$sigma, 
+           Omega = rev(l_debug$ll_params)[[2]]$Omega, 
+           Sigma = rev(l_debug$ll_params)[[2]]$Sigma,
+           control = control$control_numint),
+  rep(0.0, 9)
+) %>% t()
+
+# run next iteration
+e_asums <- future.apply::future_vapply(
+  seq_len(nrow(data)),
+  function(i_sample)
+    get_es(x = data[i_sample, , drop = TRUE],
+           pi0 = rev(l_debug$ll_params)[[1]]$pi0, 
+           mu = rev(l_debug$ll_params)[[1]]$mu, 
+           sigma = rev(l_debug$ll_params)[[1]]$sigma, 
+           Omega = rev(l_debug$ll_params)[[1]]$Omega, 
+           Sigma = rev(l_debug$ll_params)[[1]]$Sigma,
+           control = control$control_numint),
+  rep(0.0, 9)
+) %>% t()
+any(is.na(e_asums[, c("ea", "logLik", "eloga", "eloga2")])) # should be FALSE
+any(e_asums[, "eloga"]^2 > e_asums[, "eloga2"]) # should be FALSE
+i_sample <- which(e_asums[, "eloga"]^2 > e_asums[, "eloga2"])
+a_data <- data * e_asums[, "ea"] ## FIXME
+fit_sigmas <- get_sigmas(x = data, 
+                         eloga = e_asums[, "eloga"], 
+                         eloga2 = e_asums[, "eloga2"], 
+                         mu = fit_marginals$mu)
+fit_marginals$sigma <- fit_sigmas
+fit_copulasso <- copulasso(data = a_data, 
+                           marginals = fit_marginals,
+                           lambda = lambda,
+                           control = control$control_copulasso)
+fit_copulasso$copulasso_code != 0 # should be FALSE
+params_new <- list(pi0 = fit_marginals$pi0,
+                   mu = fit_marginals$mu,
+                   sigma = fit_sigmas,
+                   Sigma = fit_copulasso$Sigma,
+                   Omega = fit_copulasso$Omega,
+                   Corr_star = fit_copulasso$Corr_star)
+params <- rev(l_debug$ll_params)[[1]]
+diff_abs <- vapply(
+  c("sigma", "Corr_star"), 
+  function(i_param)
+    get_diff(params_new[[i_param]], params[[i_param]], 
+             denom_c = control$abs_tol, method = "abs"),
+  0.0)
+diff_rel <- vapply(
+  c("sigma", "Corr_star"), 
+  function(i_param)
+    get_diff(params_new[[i_param]], params[[i_param]], 
+             denom_c = control$abs_tol, method = "rel"),
+  0.0)
+```

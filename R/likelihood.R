@@ -478,14 +478,25 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
       abs(knots_diff *
             (vals_spline[-1] - vals_spline[-neval]))
     
-    fit_lm <- 
-      lm(vals_spline ~ 
-           splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1))
-    coefs_spline <- 
-      SplinesUtils::RegBsplineAsPiecePoly(
-        fit_lm,
-        "splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1)",
-        shift = FALSE)$PiecePoly$coef
+    # fit_lm <-
+    #   lm(vals_spline ~
+    #        splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1))
+    # coefs_spline <-
+    #   SplinesUtils::RegBsplineAsPiecePoly(
+    #     fit_lm,
+    #     "splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1)",
+    #     shift = FALSE)$PiecePoly$coef
+    coefs_spline <- matrix(NA_real_, nrow = 2, ncol = neval - 1) ## FIXME
+    # for some reason linear spline coefs estimated from the spline functions
+    # give negative knots function values (numerical underflow?)
+    # Which can cause mathematically invalid integrations 
+    # (integral_eloga2 * integral_dx < integral_eloga^2)
+    # Now I calculate the coefs by hand and need to test out this empirically
+    coefs_spline[2, ] <- 
+      (vals_spline[-1] - vals_spline[-neval]) /
+      (knots_spline[-1] - knots_spline[-neval])
+    coefs_spline[1, ] <- 
+      vals_spline[-neval] - knots_spline[-neval] * coefs_spline[2, ]
     # coefs_spline <-
     #   SplinesUtils::CubicInterpSplineAsPiecePoly(
     #     x = knots_spline,

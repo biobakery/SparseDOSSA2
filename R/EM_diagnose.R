@@ -77,9 +77,9 @@ EM_diagnose <- function(data,
                    pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
                    Omega = params$Omega, Sigma = params$Sigma,
                    control = control$control_numint),
-          rep(0.0, 9)
+          rep(0.0, 10)
         ) %>% t()
-        if(any(is.na(e_asums[, c("ea", "logLik", "eloga", "eloga2")]))) {
+        if(any(is.na(e_asums[, c("ea", "dx", "eloga", "eloga2")]))) {
           warning("Numeric integration in E step returned NAs!")
           converge_code <- 3
           break

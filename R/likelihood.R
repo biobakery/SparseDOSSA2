@@ -4,10 +4,14 @@ dx <- function(x,
                log.p = FALSE) {
   control <- do.call(control_integrate, control)
   if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
-    limits <- get_intLimits2(x = x,
-                             pi0 = pi0, mu = mu, sigma = sigma, 
-                             Omega = Omega, Sigma = Sigma,
-                             control = control)
+    limits <- get_intLimits(
+      x = x,
+      pi0 = pi0, mu = mu, sigma = sigma, 
+      Omega = Omega, Sigma = Sigma,
+      n_vals = round(control$n_vals_limits / 2), 
+      step_size = control$step_size_limits, 
+      maxit = control$maxit_limits)
+    
     control$lower_loga <- limits[1]
     control$upper_loga <- limits[2]
   }
@@ -38,7 +42,7 @@ dx <- function(x,
 control_integrate <- function(rel_tol = 1e-2,
                               abs_tol = 0,
                               max_eval = 50,
-                              method = "cubspline",
+                              method = "spline",
                               step_size_limits = 2, 
                               n_vals_limits = 10,
                               maxit_limits = 4,
@@ -298,10 +302,14 @@ ea <- function(x,
                control = list()) {
   control <- do.call(control_integrate, control)
   if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
-    limits <- get_intLimits2(x = x,
-                             pi0 = pi0, mu = mu, sigma = sigma, 
-                             Omega = Omega, Sigma = Sigma,
-                             control = control)
+    limits <- get_intLimits(
+      x = x,
+      pi0 = pi0, mu = mu, sigma = sigma, 
+      Omega = Omega, Sigma = Sigma,
+      n_vals = round(control$n_vals_limits / 2), 
+      step_size = control$step_size_limits, 
+      maxit = control$maxit_limits)
+    
     control$lower_loga <- limits[1]
     control$upper_loga <- limits[2]
   }
@@ -345,10 +353,14 @@ eloga <- function(x,
                   control = list()) {
   control <- do.call(control_integrate, control)
   if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
-    limits <- get_intLimits2(x = x,
-                             pi0 = pi0, mu = mu, sigma = sigma, 
-                             Omega = Omega, Sigma = Sigma,
-                             control = control)
+    limits <- get_intLimits(
+      x = x,
+      pi0 = pi0, mu = mu, sigma = sigma, 
+      Omega = Omega, Sigma = Sigma,
+      n_vals = round(control$n_vals_limits / 2), 
+      step_size = control$step_size_limits, 
+      maxit = control$maxit_limits)
+    
     control$lower_loga <- limits[1]
     control$upper_loga <- limits[2]
   }
@@ -391,10 +403,14 @@ eloga2 <- function(x,
                    control = list()) {
   control <- do.call(control_integrate, control)
   if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
-    limits <- get_intLimits2(x = x,
-                             pi0 = pi0, mu = mu, sigma = sigma, 
-                             Omega = Omega, Sigma = Sigma,
-                             control = control)
+    limits <- get_intLimits(
+      x = x,
+      pi0 = pi0, mu = mu, sigma = sigma, 
+      Omega = Omega, Sigma = Sigma,
+      n_vals = round(control$n_vals_limits / 2), 
+      step_size = control$step_size_limits, 
+      maxit = control$maxit_limits)
+    
     control$lower_loga <- limits[1]
     control$upper_loga <- limits[2]
   }
@@ -494,7 +510,7 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
     # Now I calculate the coefs by hand and need to test out this empirically
     coefs_spline[2, ] <- 
       (vals_spline[-1] - vals_spline[-neval]) /
-      (knots_spline[-1] - knots_spline[-neval])
+      knots_diff
     coefs_spline[1, ] <- 
       vals_spline[-neval] - knots_spline[-neval] * coefs_spline[2, ]
     # coefs_spline <-
@@ -552,7 +568,8 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
                             (vals_spline * exp(knots_spline))[-neval])))
   
   return(c("ea" = integral_ea / integral_dx,
-           "logLik" = log(integral_dx),
+           "dx" = integral_dx,
+           "logLik" = log(integral_dx) - sum(log(x[x > 0])),
            "eloga" = integral_eloga / integral_dx,
            "eloga2" = integral_eloga2 / integral_dx,
            "error_ea" = error_ea,

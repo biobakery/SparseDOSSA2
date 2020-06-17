@@ -19,7 +19,7 @@ integrate2 <- function(f,
     fit_integrate$integral <- fit_integrate$integral * val_offset
     fit_integrate$error <- fit_integrate$error * val_offset
     return(fit_integrate)
-  } else if (method == "cubspline") {
+  } else if (method == "spline") {
     
     neval <- 2
     knots_spline <- c(lower, upper)
@@ -41,15 +41,18 @@ integrate2 <- function(f,
         abs(knots_diff *
               (vals_spline[-1] - vals_spline[-neval]))
       
-      coefs_spline <- 
-        SplinesUtils::CubicInterpSplineAsPiecePoly(
-          x = knots_spline,
-          y = vals_spline, 
-          method = "natural")$PiecePoly$coef
-      integral <- sum(coefs_spline[1, ] * knots_diff +
-                        coefs_spline[2, ] / 2 * knots_diff^2 +
-                        coefs_spline[3, ] / 3 * knots_diff^3 +
-                        coefs_spline[4, ] / 4 * knots_diff^4)
+      coefs_spline <- matrix(NA_real_, nrow = 2, ncol = neval - 1) ## FIXME
+      coefs_spline[2, ] <- 
+        (vals_spline[-1] - vals_spline[-neval]) /
+        knots_diff
+      coefs_spline[1, ] <- 
+        vals_spline[-neval] - knots_spline[-neval] * coefs_spline[2, ]
+      
+      integral <- sum(coefs_spline[1, ] * knots_spline[-1] +
+                           coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
+                           coefs_spline[1, ] * knots_spline[-neval] - 
+                           coefs_spline[2, ] / 2 * knots_spline[-neval]^2)
+      
       error <- sum(errors_spline)
       
       if(neval >= max_eval |

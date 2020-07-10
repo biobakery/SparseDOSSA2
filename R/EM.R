@@ -9,7 +9,7 @@
 #' @importFrom magrittr %>%
 #'
 #' @examples
-EM_diagnose <- function(data, 
+EM <- function(data, 
                         lambdas,
                         control = list()) {
   control <- do.call(control_EM, control)
@@ -177,7 +177,7 @@ EM_diagnose <- function(data,
 #' @importFrom magrittr %>%
 #'
 #' @examples
-EM_diagnose_CV <- function(data, 
+EM_CV <- function(data, 
                            lambdas,
                            K,
                            control = list()) {
@@ -193,7 +193,7 @@ EM_diagnose_CV <- function(data,
   control_tmp <- control
   control_tmp$debug_dir <- paste0(control_tmp$debug_dir, "K0/")
   l_fits_full <- future::future({
-    EM_diagnose(data = data,
+    EM(data = data,
                 lambdas = lambdas,
                 control = control_tmp)$l_fits
   })
@@ -212,7 +212,7 @@ EM_diagnose_CV <- function(data,
       control_tmp <- control
       control_tmp$debug_dir <- paste0(control$debug_dir, "K", k, "/")
       
-      result_k <- EM_diagnose(data = data_training,
+      result_k <- EM(data = data_training,
                               lambdas = lambdas,
                               control = control_tmp)
       

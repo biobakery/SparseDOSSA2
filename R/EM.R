@@ -79,7 +79,7 @@ EM <- function(data,
                              eloga2 = e_asums[, "eloga2"], 
                              mu = feature_param[ ,"mu"])
     feature_param[, "sigma"] <- fit_sigmas
-    fit_copulasso <- copulasso(data = data * e_asums[, "ea"], 
+    fit_copulasso <- copulasso(data = data * exp(e_asums[, "eloga"]), 
                                marginals = feature_param,
                                lambda = lambda,
                                control = control$control_copulasso)

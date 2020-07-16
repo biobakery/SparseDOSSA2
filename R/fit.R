@@ -59,11 +59,6 @@ fit_F <- function(feature_param) {
               K_zero = K_zero))
 }
 
-#' MLE estimator for read depth distribution
-#'
-#' @param read_depth vector of total read count across samples
-#'
-#' @return estimated mean and variance parameters
 fit_depth <- function(depth) {
   return(c("mu_depth" = mean(log(depth)),
            "sigma_depth" = sd(log(depth))))

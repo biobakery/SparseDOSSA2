@@ -1,19 +1,20 @@
-#' Simulation of realistic microbial observations
+#' Title
 #'
-#' @param n_sample Number of samples to simulate
-#' @param n_feature Number of features to simulate
-#' @param template Template for simulation. This can be either one of the 
-#' prescribed datasets or fitting results from SparseDOSSA2_fit
-#' @param new_features Should SparseDOSSA2 simulate new microbial features, or 
-#' the same as the template dataset?
-#' @param spike_metadata Should SparseDOSSA2 simulate associations with 
-#' metadata?
-#' @param spike_strength Effect size of association with metadata
+#' @param template 
+#' @param n_sample 
+#' @param new_features 
+#' @param n_feature 
+#' @param spike_metadata 
+#' @param metadata_effect_size 
+#' @param perc_feature_spiked_metadata 
+#' @param metadata_matrix 
+#' @param feature_metadata_spike_df 
+#' @param median_read_depth 
 #' @param control 
 #'
 #' @return
-#'
 #' @export
+#'
 #' @examples
 SparseDOSSA2 <- function(template,
                                   n_sample,

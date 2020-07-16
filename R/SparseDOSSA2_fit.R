@@ -79,7 +79,8 @@ control_fit <- function(maxit = 100,
 #' Title
 #'
 #' @param data 
-#' @param lambda 
+#' @param lambdas 
+#' @param K 
 #' @param control 
 #'
 #' @return

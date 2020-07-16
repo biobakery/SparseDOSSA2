@@ -1,0 +1,125 @@
+---
+title: "Simulating realistic microbial observations with SparseDOSSA2"
+author: 
+- name: "Siyuan Ma"
+  affiliation: 
+  - Harvard T.H. Chan School of Public Health
+  - Broad Institute
+  email: siyuanma@g.harvard.edu
+package: SparseDOSSA2
+date: "07/10/2020"
+output: 
+  BiocStyle::html_document
+vignette: >
+  %\VignetteIndexEntry{SparseDOSSA2}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}  
+# bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = FALSE)
+```
+
+# Introduction
+
+`SparseDOSSA2` is an R package for fitting and simulation of realistic microbial abundance observations.
+
+```{r, message=FALSE}
+# library(SparseDOSSA2)
+# # tidyverse packages for utilities
+# library(magrittr)
+# library(dplyr)
+# library(ggplot2)
+
+smar::sourceDir("R/")
+```
+
+# Installation
+
+SparseDOSSA2 is a Bioconductor package and can be installed via the following 
+command.
+
+```{r Installation, eval = FALSE}
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("SparseDOSSA2")
+```
+
+# Input data
+
+As input, `MMUPHin` requires a feature-by-sample abundance table of microbial 
+abundance observations. They can be either count or on the relative abundance
+scale.
+
+```{r load data}
+data("HMP_stool", package = "SparseDOSSA2")
+# columns are samples.
+stool[1:5, 1, drop = FALSE]
+```
+
+# Fitting SparseDOSSA2 model with `SparseDOSSA2_fit`
+
+`SparseDOSSA2_fit` fits the SparseDOSSA2 hierarchical model to estimate the 
+model parameters: per-feature prevalence, and mean and standard deviation of 
+non-zero abundances. It also estimates joint distribution of these parameters
+and (if input is count) a read count distribution.
+
+```{r SparseDOSSA2_fit}
+SparseDOSSA2_fit <- fit_SparseDOSSA2(data = stool,
+                                     control = list(verbose = TRUE))
+names(SparseDOSSA2_fit)
+```
+
+# Fitting SparseDOSSA2 model with `SparseDOSSA2_fit`
+
+The user can additionally achieve optimal model fitting via 
+`SparseDOSSA2_fit_CV`. They can either provide a vector of tuning parameter
+values (`lambdas`) to control sparsity in the estimation of the correlation
+matrix parameter, or a grid will be selected automatically. 
+`SparseDOSSA2_fit_CV` uses cross validation to select an "optimal" model fit
+across these tuning parameters via average testing log-likelihood. This is a 
+computationally intensive procedure, and best-suited for users that would like
+accurate fitting to the input dataset, for best simulated new microbial 
+observations on the same features as the input (i.e. not new features).
+
+```{r SparseDOSSA2_fit_CV}
+set.seed(1)
+SparseDOSSA2_CVfit <- fitCV_SparseDOSSA2(data = stool,
+                                         lambdas = c(0.1, 1),
+                                         K = 2,
+                                         control = list(verbose = TRUE))
+names(SparseDOSSA2_CVfit)
+```
+
+# Simulating realistic microbial observations with `SparseDOSSA2_generate`
+```{r SparseDOSSA2_generate}
+SparseDOSSA2_simulation <- SparseDOSSA2(template = SparseDOSSA2_fit,
+                                        new_features = TRUE,
+                                        n_sample = 100,
+                                        n_feature = 200,
+                                        spike_metadata = "abundance",
+                                        control = list(verbose = TRUE))
+names(SparseDOSSA_simulation)
+```
+
+# Flexible parallelization controls with `future`
+
+```{r future}
+# future::plan(future::sequential, future::multicore)
+# fit_SparseDOSSA2 <- SparseDOSSA2_fit(data = stool,
+#                                      control = list(verbose = TRUE))
+# 
+# future::plan(future::sequential, future::sequential, future::multicore)
+# fit_SparseDOSSA2 <- SparseDOSSA2_fit_CV(data = stool,
+#                                         lambdas = c(0.1, 1),
+#                                         K = 2,
+#                                         control = list(verbose = TRUE))
+```
+
+# Sessioninfo
+```{r sessioninfo}
+sessionInfo()
+```
+# References

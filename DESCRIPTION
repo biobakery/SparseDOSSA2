@@ -13,9 +13,9 @@ RoxygenNote: 7.0.2
 Depends:
   ks,
   mvtnorm,
-  glasso,
+  huge,
   future.apply,
-  magrittr,
-  cubature
-Suggests: 
-    testthat (>= 2.1.0)
+  magrittr
+Suggests:
+  cubature,
+  testthat (>= 2.1.0)

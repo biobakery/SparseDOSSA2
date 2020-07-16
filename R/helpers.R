@@ -3,8 +3,15 @@ logit <- function(x) log(x) - log(1 - x)
 expit <- function(x) 
   exp(x) / (1 + exp(x))
 
-TSS <- function(x) {
+TSS <- function(x, correct = FALSE) {
+  if(any(x < 0))
+    stop("Negative x values are not accepted!")
   if(all(x == 0)) return(x)
+  # this is a special case where only one feature is present
+  if(sum(x > 0) == 1 & correct) {
+    x[x > 0] <- 1 - 0.5 / length(x)
+    return(x)
+  }
   return(x / sum(x))
 }
 
@@ -71,6 +78,9 @@ enforce_corr <- function(x) {
 
 a_to_u <- function(a, pi0, mu, sigma,
                    half_pi0 = FALSE) {
+  if(any(pi0 == 1) | any(pi0 == 0))
+    stop("zero or one valued pi0 is not supported!")
+  
   if(half_pi0)
     to_return <-  pi0 / 2
   else
@@ -88,7 +98,7 @@ a_to_u <- function(a, pi0, mu, sigma,
   return(to_return)
 }
 
-a_to_u2 <- function(a, pi0, mu, sigma,
+a_to_u_marg <- function(a, pi0, mu, sigma,
                     half_pi0 = FALSE,
                     u_tol =  1e-5) {
   if(half_pi0)
@@ -112,9 +122,11 @@ a_to_u2 <- function(a, pi0, mu, sigma,
 }
 
 a_to_g <- function(a, pi0, mu, sigma) {
+  if(pi0 == 1 | pi0 == 0)
+    stop("zero or one valued pi0 is not supported!")
   ind_nonzero <- a > 0
   
-  to_return <- u <- a_to_u2(a, pi0, mu, sigma)
+  to_return <- u <- a_to_u_marg(a, pi0, mu, sigma)
   to_return[ind_nonzero] <- qnorm(u[ind_nonzero])
   to_return[!ind_nonzero] <- - mean(to_return[ind_nonzero]) * (1 - pi0) / pi0
   
@@ -143,15 +155,19 @@ a <- function(x, asum) {
   return(a)
 }
 
-get_sigmas <- function(x, eloga, eloga2, mu) {
-  vapply(seq_len(ncol(x)),
-         function(i_feature) {
-           ind_samples <- x[, i_feature] > 0
-           sqrt(mean(eloga2[ind_samples] - 
-                     2 * eloga[ind_samples] * (mu[i_feature] - log(x[ind_samples, i_feature])) +
-                     (mu[i_feature] - log(x[ind_samples, i_feature]))^2))
-         },
-         0.0)
+get_sigmas <- function(data, eloga, eloga2, mu) {
+  sigmas <- 
+    vapply(seq_len(ncol(data)),
+           function(i_feature) {
+             ind_samples <- data[, i_feature] > 0
+             sqrt(mean(eloga2[ind_samples] - 
+                         2 * eloga[ind_samples] * 
+                         (mu[i_feature] - log(data[ind_samples, i_feature])) +
+                         (mu[i_feature] - log(data[ind_samples, i_feature]))^2))
+           },
+           0.0)
+  names(sigmas) <- colnames(data)
+  return(sigmas)
 }
 
 # get_intLimits <- function(f, 
@@ -215,7 +231,7 @@ make_CVfolds <- function(n, K) {
 }
 
 filter_data <- function(data, 
-                        k_feature = 2, k_sample = 1,
+                        k_feature = 1, k_sample = 1,
                         maxit = 3) {
   i_iter <- 0
   ind_feature <- rep(TRUE, ncol(data))

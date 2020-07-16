@@ -4,67 +4,53 @@ copulasso <- function(data, marginals,
   control <- do.call(control_copulasso, control)
   if(ncol(data) != nrow(marginals))
     stop("Dimension of data and marginals do not agree!")
-  data_g <- vapply(seq_len(ncol(data)),
-                   function(i_feature)
-                     a_to_g(a = data[, i_feature],
-                            pi0 = marginals$pi0[i_feature],
-                            mu = marginals$mu[i_feature],
-                            sigma = marginals$sigma[i_feature]),
-                   rep(0.0, nrow(data)))
-  Corr_star <- cor(data_g, method = "pearson")
-  S <- get_s(cor_data = Corr_star,
-             pi0 = marginals$pi0,
-             glim = marginals$glim,
-             g0 = marginals$g0,
-             sigmaMod = marginals$sigmaMod)
-  Omega <- diag(1/(diag(S) + lambda))
   
-  if(control$simplify) 
-    z <- which(rowSums(abs(S) > lambda) > 1)
-  else 
-    z <- seq_len(nrow(S))
-  q <- length(z)
-  if (q > 0) {
-    if(control$penalize_method == "huge") {
-      out.glasso <- huge::huge.glasso(x = S[z, z, drop = FALSE],
-                                      lambda = lambda,
-                                      verbose = FALSE)
-      Omega[z, z] <- out.glasso$icov[[1]]
-    }
-    if(control$penalize_method == "huge_conditioned") {
-      S_conditioned <- condition_ridge(S[z, z, drop = FALSE],
-                                lambda = 1e-6,
-                                method = "ridge1")
-      out.glasso <- huge::huge.glasso(x = S_conditioned,
-                                      lambda = lambda,
-                                      verbose = FALSE)
-      Omega[z, z] <- out.glasso$icov[[1]]
-    }
-    if(control$penalize_method == "hugec") {
-      out.glasso <- .Call("_huge_hugeglasso",
-                          S[z, z, drop = FALSE],
-                          lambda,
-                          FALSE,
-                          FALSE,
-                          FALSE,
-                          PACKAGE = "huge")
-      Omega[z, z] <- out.glasso$icov[[1]]
-    }
-    if(control$penalize_method == "glasso") {
-      out.glasso <- glasso::glasso(s = S[z, z, drop = FALSE],
-                                   rho = lambda)
-      Omega[z, z] <- out.glasso$wi
-    }
-    if(control$penalize_method %in% c("ridge1", "ridge2")) {
-      out.glasso <- solve_ridge(S[z, z, drop = FALSE],
-                                lambda,
-                                method = penalize_method)
-      Omega[z, z] <- out.glasso
+  if(is.null(lambda)) {
+    Omega <- 
+      Sigma <- 
+      Corr_star <- diag(1, ncol(data))
+  } else {
+    data_g <- vapply(seq_len(ncol(data)),
+                     function(i_feature)
+                       a_to_g(a = data[, i_feature],
+                              pi0 = marginals[i_feature, "pi0"],
+                              mu = marginals[i_feature, "mu"],
+                              sigma = marginals[i_feature, "sigma"]),
+                     rep(0.0, nrow(data)))
+    Corr_star <- cor(data_g, method = "pearson")
+    S <- get_s(cor_data = Corr_star,
+               pi0 = marginals[, "pi0"],
+               glim = marginals[, "glim"],
+               g0 = marginals[, "g0"],
+               sigmaMod = marginals[, "sigmaMod"])
+    Omega <- diag(1/(diag(S) + lambda))
+    
+    if(control$simplify) 
+      z <- which(rowSums(abs(S) > lambda) > 1)
+    else 
+      z <- seq_len(nrow(S))
+    q <- length(z)
+    if (q > 0) {
+      if(control$penalize_method == "huge_conditioned") {
+        S_conditioned <- condition_ridge(S[z, z, drop = FALSE],
+                                         lambda = 1e-6,
+                                         method = "ridge1")
+        out.glasso <- huge::huge.glasso(x = S_conditioned,
+                                        lambda = lambda,
+                                        verbose = FALSE)
+        Omega[z, z] <- out.glasso$icov[[1]]
+      }
+      if(control$penalize_method %in% c("ridge1", "ridge2")) {
+        out.glasso <- solve_ridge(S[z, z, drop = FALSE],
+                                  lambda,
+                                  method = penalize_method)
+        Omega[z, z] <- out.glasso
+      }
     }
   }
   
-  if(!is.null(control$debug_file))
-    save(Omega, file = control$debug_file)
+  if(!is.null(control$debug_dir))
+    save(Omega, file = paste0(control$debug_dir, "/debug_copulasso.RData"))
 
   if(any(is.na(Omega))) {
     # warning("Missing values in Omega estimation! (lambda to small?)") # FIXME
@@ -96,24 +82,20 @@ control_copulasso <- function(penalize_method = "huge_conditioned",
                               simplify = FALSE,
                               symm = TRUE,
                               corr = TRUE,
-                              debug_file = NULL) {
+                              debug_dir = NULL) {
   list(penalize_method = penalize_method,
        threshold_zero = threshold_zero,
        simplify = simplify,
        symm = symm,
        corr = corr, 
-       debug_file = debug_file)
+       debug_dir = debug_dir)
 }
 
-iRho <- function(rho_s) sinpi(rho_s/6) * 2
-
-Rho <- function(rho_p) asin(rho_p / 2) / pi * 6
-
-Rho2 <- function(rho_p, 
-                 pi0_1, pi0_2, 
-                 glim_1, glim_2,
-                 g0_1, g0_2,
-                 sigmaMod_1, sigmaMod_2) {
+Rho <- function(rho_p, 
+                pi0_1, pi0_2, 
+                glim_1, glim_2,
+                g0_1, g0_2,
+                sigmaMod_1, sigmaMod_2) {
   mat_cor <- matrix(c(1, rho_p, rho_p, 1),
                     2, 2)
   part1 <- g0_1 * g0_2 * 
@@ -147,69 +129,38 @@ Rho2 <- function(rho_p,
       mvtnorm::pmvnorm(lower = c(glim_1, glim_2),
                        corr = mat_cor)
   }
-
+  
   return((part1 + part2 + part3 + part4) / sigmaMod_1 / sigmaMod_2)
 }
 
-vRho2 <- Vectorize(Rho2, vectorize.args = "rho_p")
+vRho <- Vectorize(Rho, vectorize.args = "rho_p")
 
-iRho2 <- function(rho_s, 
-                  pi0_1, pi0_2, 
-                  glim_1, glim_2,
-                  g0_1, g0_2,
-                  sigmaMod_1, sigmaMod_2) {
-  f_lim <- vRho2(c(-0.99, 0.99),
-                 pi0_1 = pi0_1, pi0_2 = pi0_2, 
-                 glim_1 = glim_1, glim_2 = glim_2,
-                 g0_1 = g0_1, g0_2 = g0_2,
-                 sigmaMod_1 = sigmaMod_1, sigmaMod_2 = sigmaMod_2)
+iRho <- function(rho_s, 
+                 pi0_1, pi0_2, 
+                 glim_1, glim_2,
+                 g0_1, g0_2,
+                 sigmaMod_1, sigmaMod_2) {
+  f_lim <- vRho(c(-0.99, 0.99),
+                pi0_1 = pi0_1, pi0_2 = pi0_2, 
+                glim_1 = glim_1, glim_2 = glim_2,
+                g0_1 = g0_1, g0_2 = g0_2,
+                sigmaMod_1 = sigmaMod_1, sigmaMod_2 = sigmaMod_2)
   if(rho_s <= f_lim[1])
     return(-0.99) ## FIXME
   if(rho_s >= f_lim[2])
     return(0.99)
   
   uniroot(f = function(x) 
-          vRho2(x, 
-                pi0_1 = pi0_1, pi0_2 = pi0_2, 
-                glim_1 = glim_1, glim_2 = glim_2,
-                g0_1 = g0_1, g0_2 = g0_2,
-                sigmaMod_1 = sigmaMod_1, sigmaMod_2 = sigmaMod_2) - 
-            rho_s, 
-          interval = c(-0.99, 0.99),
-          f.lower = f_lim[1],
-          f.upper = f_lim[2],
-          maxiter = 100)$root
-}
-
-iRho3 <- function(rho_s, 
-                  pi0_1, pi0_2, 
-                  glim_1, glim_2,
-                  g0_1, g0_2,
-                  sigmaMod_1, sigmaMod_2,
-                  tol = 1e-4) {
-  if(rho_s >= 0) {
-    lim_upper <- 0.999
-    lim_lower <- 0
-  } else {
-    lim_upper <- 0
-    lim_lower <- -0.999
-  }
-  while(TRUE) {
-    sol <- (lim_upper + lim_lower) / 2
-    vsol <- Rho2(sol, 
-                 pi0_1 = pi0_1, pi0_2 = pi0_2, 
-                 glim_1 = glim_1, glim_2 = glim_2,
-                 g0_1 = g0_1, g0_2 = g0_2,
-                 sigmaMod_1 = sigmaMod_1, sigmaMod_2 = sigmaMod_2)
-    if(abs(vsol - rho_s) < tol)
-      return(sol)
-    
-    if(rho_s > vsol) {
-      lim_lower <- sol
-    } else {
-      lim_upper <- sol
-    }
-  }
+    vRho(x, 
+         pi0_1 = pi0_1, pi0_2 = pi0_2, 
+         glim_1 = glim_1, glim_2 = glim_2,
+         g0_1 = g0_1, g0_2 = g0_2,
+         sigmaMod_1 = sigmaMod_1, sigmaMod_2 = sigmaMod_2) - 
+      rho_s, 
+    interval = c(-0.99, 0.99),
+    f.lower = f_lim[1],
+    f.upper = f_lim[2],
+    maxiter = 100)$root
 }
 
 get_s <- function(cor_data, pi0, glim, g0, sigmaMod) {
@@ -225,12 +176,12 @@ get_s <- function(cor_data, pi0, glim, g0, sigmaMod) {
         ind_feature1 <- df_index[ii_combo, ]$feature1
         ind_feature2 <- df_index[ii_combo, ]$feature2
         
-        iRho2(rho_s = cor_data[ind_feature1, ind_feature2],
-              pi0_1 = pi0[ind_feature1], pi0_2 = pi0[ind_feature2],
-              glim_1 = glim[ind_feature1], glim_2 = glim[ind_feature2],
-              g0_1 = g0[ind_feature1], g0_2 = g0[ind_feature2],
-              sigmaMod_1 = sigmaMod[ind_feature1], 
-              sigmaMod_2 = sigmaMod[ind_feature2])
+        iRho(rho_s = cor_data[ind_feature1, ind_feature2],
+             pi0_1 = pi0[ind_feature1], pi0_2 = pi0[ind_feature2],
+             glim_1 = glim[ind_feature1], glim_2 = glim[ind_feature2],
+             g0_1 = g0[ind_feature1], g0_2 = g0[ind_feature2],
+             sigmaMod_1 = sigmaMod[ind_feature1], 
+             sigmaMod_2 = sigmaMod[ind_feature2])
       },
       0.0)
   
@@ -239,10 +190,6 @@ get_s <- function(cor_data, pi0, glim, g0, sigmaMod) {
   to_return[upper.tri(to_return)] <- upper_tri(t(to_return), warning = FALSE)
   
   return(to_return)
-}
-
-negLogLik_mvn <- function(S, Omega) { ##FIXME
-  -log(det(Omega)) + sum(Omega * S)
 }
 
 solve_ridge <- function(S, lambda, method = "ridge1") {

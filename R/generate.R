@@ -1,167 +1,200 @@
-#' Generate per-feature parameters (mu, sigma, pi) given pre-fit non-parameter density kernels
-#'
-#' @param fit_F a list (fit generated fro estimate_F)
-#' @param feature_param data frame of estimated per-feature parameters (in order mu, sigma2, and pi)
-#' @param n_feature number of features to generate
-#'
-#' @return matrix of per-feature parameters (in order mu, sigma2, and pi)
-generate_featureParam <- function(fit_F, feature_param, n_feature) {
-
-  if(!all(names(fit_F) == c("p0_sigma2", "K_nonzero", "K_zero")))
-    stop("fit_F is not of the correct format!")
-
-  # transform pi parameter
-  feature_param[, 3] <- log(feature_param[, 3]) - log(1 - feature_param[, 3])
-
-  if(fit_F$p0_sigma2 > 0)
-    ind_sigma2 <- rbinom(n = n_feature, size = 1, prob = 1 - fit_F$p0_sigma2) == 1
-  else
-    ind_sigma2 <- rep(TRUE, length = n_feature)
-
-  # simulate parameters for non-zero sigma2s
-  feature_paramNonzeroSigma2 <- feature_param[feature_param[, 2] > 0, , drop = FALSE]
-  ind_sigma2_nonzero_tosimulate <- ind_sigma2[ind_sigma2]
-  mat_simulatedParam <- matrix(NA, nrow = sum(ind_sigma2_nonzero_tosimulate),
-                               ncol = 3)
+generate_a <- function(n, 
+                       feature_param, Omega,
+                       maxit = 10, verbose = FALSE) {
+  i_iter <- 0
+  samples_a <- matrix(NA, 
+                      nrow = nrow(feature_param),
+                      ncol = 0)
+  rownames(samples_a) <- rownames(feature_param)
+  
   while(TRUE) {
-    nFeature_nonzero <- sum(ind_sigma2_nonzero_tosimulate)
-    simulated_mixture <- feature_paramNonzeroSigma2[sample.int(n = nrow(feature_paramNonzeroSigma2),
-                                                               size = nFeature_nonzero,
-                                                               replace = TRUE), , drop = FALSE]
-    simulated_difference <- mvtnorm::rmvnorm(n = nFeature_nonzero, sigma = fit_F$K_nonzero)
-    mat_simulatedNonzero <- simulated_mixture + simulated_difference
-    mat_simulatedParam[ind_sigma2_nonzero_tosimulate, ] <- mat_simulatedNonzero
-    ind_sigma2_nonzero_tosimulate <- mat_simulatedParam[, 2] <= 0
-    if(!any(ind_sigma2_nonzero_tosimulate)) break
-  }
-
-  nFeature_zero <- sum(!ind_sigma2)
-  if(nFeature_zero > 0) {
-    feature_paramZeroSigma2 <- feature_param[feature_param[, 2] == 0, , drop = FALSE]
-    simulated_mixture <- feature_paramZeroSigma2[sample.int(n = nrow(feature_paramZeroSigma2),
-                                                            size = nFeature_zero,
-                                                            replace = TRUE), , drop = FALSE]
-    simulated_difference <-  mvtnorm::rmvnorm(n = nFeature_zero, sigma = fit_F$K_zero)
-    simulated_mixture[, c(1, 3)] <- simulated_mixture[, c(1, 3), drop = FALSE] +
-      simulated_difference
-    mat_simulatedParam <- rbind(mat_simulatedParam, simulated_mixture)
-  }
-
-  mat_simulatedParam[, 3] <- exp(mat_simulatedParam[, 3]) / (1 + exp(mat_simulatedParam[, 3]))
-  return(mat_simulatedParam)
-}
-
-#' Generate basis (i.e., pij) matrix, with the option to incorporate copula shuffling for correlation structure
-#'
-#' @param feature_param data frame/matrix of generated (if same_features = FALSE) or estimated
-#' (if same_feature = TRUE) per-feature parameters (in order mu, sigma2, and pi)
-#' @param n_sample number of samples to generate
-#' @param fit_C a copula fit (fit generated from estimate_C). If null then no shuffling will be performed.
-#'
-#' @return a list of matrices, in order:
-#' mat_basis_original is the originally generated matrix
-#' mat_basis_shuffled is the copula shuffled matrix (is equal to mat_basis_original if fit_C is null)
-#' mat_basis is the normalized basis matrix for proper multinomial sampling
-generate_basis <- function(feature_param, n_sample, fit_C = NULL) {
-
-  # keep sampling until no samples have all-zero values
-  ind_sample_tosimulate <- rep(TRUE, n_sample)
-  tMat_basis_original <- tMat_basis_shuffled <- matrix(NA_real_, nrow = n_sample, ncol = nrow(feature_param))
-  while(TRUE) {
-    simulated_tMat_basis_original <- sapply(1:nrow(feature_param), function(i_feature) {
-      generate_ZILogitN(feature_param[i_feature, 1],
-                        feature_param[i_feature, 2],
-                        feature_param[i_feature, 3],
-                        n_sample = n_sample)
-    })
-
-    if(!is.null(fit_C)) {
-      if(nrow(feature_param) != fit_C@dimension)
-        stop("Number of features disagree in feature_param and fit_C!")
-      tSimulated_rank <- copula::rCopula(fit_C, n = n_sample)
-      tSimulated_rank <- apply(tSimulated_rank, 2, rank)
-      simulated_tMat_basis_shuffled <- sapply(1:ncol(simulated_tMat_basis_original),
-                                              function(i_feature)
-                                                sort(simulated_tMat_basis_original[, i_feature])[
-                                                  tSimulated_rank[, i_feature]])
-    } else {
-      simulated_tMat_basis_shuffled <- simulated_tMat_basis_original
+    if(i_iter + 1 > maxit)
+      stop("Can't satisfy conditions!")
+    i_iter <- i_iter + 1
+    if(verbose) 
+      print(i_iter)
+    
+    samples_a <- cbind(samples_a,
+                       t(rcopulasso(n = n,
+                                    pi0 = feature_param[, "pi0"],
+                                    mu = feature_param[, "mu"],
+                                    sigma = feature_param[, "sigma"],
+                                    Omega = Omega)))
+    
+    ind_nonzero <- apply(samples_a > 0, 2, any) ## FIXME??
+    if(sum(ind_nonzero) >= n) {
+      samples_a <- samples_a[, ind_nonzero][, seq_len(n)]
+      colnames(samples_a) <- paste0("Sample", seq_len(n))
+      return(samples_a)
     }
+  }
+}
 
-    ind_simulated_nonzero <- apply(simulated_tMat_basis_shuffled > 0, 1, any)
-    n_simulated <- min(sum(ind_sample_tosimulate), sum(ind_simulated_nonzero))
-    tMat_basis_original[ind_sample_tosimulate, ][1:n_simulated, ] <-
-      simulated_tMat_basis_original[ind_simulated_nonzero, , drop = FALSE][1:n_simulated, ]
-    tMat_basis_shuffled[ind_sample_tosimulate, ][1:n_simulated, ] <-
-      simulated_tMat_basis_shuffled[ind_simulated_nonzero, , drop = FALSE][1:n_simulated, ]
-    ind_sample_tosimulate[ind_sample_tosimulate][1:n_simulated] <- FALSE
+rcopulasso <- function(n, pi0, mu, sigma, Omega) {
+  if(length(pi0) != length(mu) |
+     length(pi0) != length(sigma) |
+     length(pi0) != nrow(Omega))
+    stop("Parameter dimensions must agree!")
+  
+  # sample marginals
+  mat_amarginals <- 
+    vapply(seq_len(length(pi0)),
+           function(i)
+             rZILogN_one(n = n,
+                         pi0 = pi0[i],
+                         mu = mu[i],
+                         sigma = sigma[i]),
+           rep(0.0, n))
+  # arrange from smallest to largest for shuffling
+  mat_amarginals <- 
+    apply(mat_amarginals, 2, function(x) x[order(x)])
+  
+  # sample ranks
+  mat_rank <- 
+    mvtnorm::rmvnorm(n = n, sigma = solve(Omega))
+  mat_rank <- apply(mat_rank, 2, rank)
+  
+  mat_a <- 
+    vapply(seq_len(length(pi0)),
+           function(i)
+             mat_amarginals[, i, drop = TRUE][mat_rank[, i, drop = TRUE]],
+           rep(0.0, n))
+  
+  return(mat_a)
+}
 
-    if(!any(ind_sample_tosimulate)) break
+rZILogN_one <- function(n, pi0, mu, sigma) {
+  return(exp(rnorm(n = n, mean = mu, sd = sigma)) *
+           rbinom(n = n, size = 1, prob = 1 - pi0))
+}
+
+generate_featureParam <- function(F_fit, param_original, n_feature) {
+  if(!all(names(F_fit) == c("p0_sigma", "K_nonzero", "K_zero")))
+    stop("F_fit is not of the correct format!")
+  
+  # transform pi parameter
+  param_original[, "pi0"] <- logit(param_original[, "pi0"])
+  
+  if(F_fit$p0_sigma > 0)
+    ind_sigma <- rbinom(n = n_feature, size = 1, 
+                        prob = 1 - F_fit$p0_sigma) == 1
+  else
+    ind_sigma <- rep(TRUE, length = n_feature)
+  
+  # simulate parameters for non-zero sigmas
+  param_original_nonZeroSigma <-
+    param_original[param_original[, "sigma"] > 0, , drop = FALSE]
+  ind_sigma_nonzero_tosimulate <- ind_sigma[ind_sigma]
+  param_simulated <- 
+    matrix(NA, nrow = sum(ind_sigma_nonzero_tosimulate), ncol = 3)
+  dimnames(param_simulated) <- list(paste0("Feature", seq_len(n_feature)),
+                                    c("pi0", "mu", "sigma"))
+  while(TRUE) {
+    nFeature_nonzero <- sum(ind_sigma_nonzero_tosimulate)
+    simulated_mixture <- 
+      param_original_nonZeroSigma[sample.int(
+        n = nrow(param_original_nonZeroSigma),
+        size = nFeature_nonzero,
+        replace = TRUE), , drop = FALSE]
+    simulated_difference <- mvtnorm::rmvnorm(n = nFeature_nonzero, 
+                                             sigma = F_fit$K_nonzero)
+    simulated_mixture <- simulated_mixture + simulated_difference
+    param_simulated[ind_sigma_nonzero_tosimulate, ] <- simulated_mixture
+    ind_sigma_nonzero_tosimulate <- param_simulated[, "sigma"] <= 0
+    if(!any(ind_sigma_nonzero_tosimulate)) break
+  }
+  
+  nFeature_zero <- sum(!ind_sigma)
+  if(nFeature_zero > 0) {
+    param_original_zeroSigma <- 
+      param_original[param_original[, "sigma"] == 0, , drop = FALSE]
+    simulated_mixture <- 
+      param_original_zeroSigma[sample.int(
+        n = nrow(param_original_zeroSigma),
+        size = nFeature_zero,
+        replace = TRUE), , drop = FALSE]
+    simulated_difference <-  mvtnorm::rmvnorm(n = nFeature_zero, 
+                                              sigma = F_fit$K_zero)
+    simulated_mixture[, c("pi0", "mu")] <- 
+      simulated_mixture[, c("pi0", "mu"), drop = FALSE] +
+      simulated_difference
+    param_simulated <- rbind(param_simulated, simulated_mixture)
+  }
+  
+  param_simulated[, "pi0"] <- expit(param_simulated[, "pi0"])
+  return(param_simulated)
+}
+
+#' Title
+#'
+#' @param features 
+#' @param perc_feature_spiked_metadata 
+#' @param n_metadata 
+#' @param effect_size 
+#' @param spike_metadata 
+#'
+#' @return
+#' @importFrom magrittr %>%
+#'
+#' @examples
+generate_feature_metadata_spike_df <- 
+  function(features,
+           perc_feature_spiked_metadata,
+           n_metadata,
+           effect_size,
+           spike_metadata = c("both", 
+                              "abundance",
+                              "prevalence")) {
+    n_feature_spiked <- ceiling(length(features) *
+                                  perc_feature_spiked_metadata)
+    if(spike_metadata == "both")
+      spike_metadata <- c("abundance", "prevalence")
+    
+    feature_metadata_spike_df <- 
+      purrr::map2_dfr(seq_len(n_metadata),
+                      effect_size,
+                      function(metadatum_i, effect_size_i) {
+                        data.frame(metadata_datum = metadatum_i,
+                                   effect_size = 
+                                     effect_size_i * 
+                                     sample(c(-1, 1),
+                                            size = n_feature_spiked,
+                                            replace = TRUE),
+                                   feature_spiked = 
+                                     sample(features,
+                                            size = n_feature_spiked,
+                                            replace = FALSE),
+                                   stringsAsFactors = FALSE)
+                      })
+    feature_metadata_spike_df <- 
+      tidyr::expand_grid(feature_metadata_spike_df,
+                         associated_property = spike_metadata) %>% 
+      dplyr::select(metadata_datum, 
+                    feature_spiked,
+                    associated_property,
+                    effect_size) %>% 
+      dplyr::arrange(metadata_datum,
+                     associated_property,
+                     -effect_size) %>% 
+      as.data.frame()
+    
+    return(feature_metadata_spike_df)
   }
 
-  mat_basis <- apply(tMat_basis_shuffled, 1, function(x) x / sum(x))
-  colnames(tMat_basis_original) <-
-    colnames(tMat_basis_shuffled) <-
-    rownames(mat_basis) <- rownames(feature_param)
-  rownames(tMat_basis_original) <-
-    rownames(tMat_basis_shuffled) <-
-    colnames(mat_basis) <- paste0("Sample", 1:n_sample)
-
-  return(list(mat_basis_original = t(tMat_basis_original),
-              mat_basis_shuffled = t(tMat_basis_shuffled),
-              mat_basis = mat_basis))
+generate_depth <- function(mu_depth, 
+                           sigma_depth, 
+                           n, median_depth) {
+  depth <- exp(rnorm(n = n, mean = mu_depth, sd = sigma_depth))
+  depth <- round(depth / median(depth) * median_depth)
+  return(depth)
 }
 
-#' Generate zero-inflated logistic normal per-feature basis (pij for fixed j)
-#'
-#' @param mu mean parameter for the normal component
-#' @param sigma2 variance parameter for the normal component
-#' @param pi prevalence (i.e. 1 - zero proportion) parameter
-#' @param n_sample number of samples to generate
-#'
-#' @return vector of zero-infated proportions for a given feature
-generate_ZILogitN <- function(mu, sigma2, pi, n_sample) {
-  simulated_nonzero <- rnorm(n = n_sample, mean = mu, sd = sqrt(sigma2))
-  simulated_nonzero <- exp(simulated_nonzero) / (1 + exp(simulated_nonzero))
-  ind_nonzero <- rbinom(n = n_sample, size = 1, p = pi)
-  return(simulated_nonzero * ind_nonzero)
-}
-
-# generate_spiked_basis <- function(feature_param, n_sample) {
-#   feature_param[, 3] <- exp(feature_param[, 3]) / (1 + exp(feature_param[, 3]))
-#   mat_basis <- sapply(1:nrow(feature_param), function(i_feature) {
-#     generate_ZILogitN(feature_param[i_feature, 1],
-#                       feature_param[i_feature, 2],
-#                       feature_param[i_feature, 3],
-#                       n_sample = n_sample)
-#   })
-#   mat_basis <- apply(mat_basis, 1, function(x) x / sum(x))
-# }
-
-#' Generate log-normal per-sample read counts
-#'
-#' @param mu mean parameter
-#' @param sigma2 variance parameter
-#' @param n_sample number of samples to generate
-#' @param read_depth median read depth to normalize to
-#'
-#' @return vector of total read depths
-generate_readDepth <- function(mu, sigma2, n_sample, read_depth) {
-  samples <- exp(rnorm(n = n_sample, mean = mu, sd = sqrt(sigma2)))
-  samples <- round(samples / median(samples) * read_depth)
-  return(samples)
-}
-
-#' Generate multinomial sampled read counts matrix
-#'
-#' @param mat_p feature x sample matrix of underlying relative abundance
-#' @param n_i vector of total read count across samples
-#'
-#' @return feature x sample matrix of microbial read count
-generate_readCount <- function(mat_p, n_i) {
-  mat_count <- sapply(1:length(n_i), function(i_sample) {
-    rmultinom(n = 1, size = n_i[i_sample], prob = mat_p[, i_sample])
-  })
-  dimnames(mat_count) <- dimnames(mat_p)
+generate_count <- function(rel, depth) {
+  mat_count <- 
+    vapply(seq_along(depth), 
+           function(i_sample) 
+             rmultinom(n = 1, size = depth[i_sample], prob = rel[, i_sample]),
+           rep(0, nrow(rel)))
+  dimnames(mat_count) <- dimnames(rel)
   return(mat_count)
-}
+}  

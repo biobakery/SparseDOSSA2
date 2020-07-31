@@ -60,8 +60,8 @@ fit_SparseDOSSA2 <- function(data,
 }
 
 control_fit <- function(maxit = 100,
-                        rel_tol = 1e-3,
-                        abs_tol = 1e-3,
+                        rel_tol = 1e-2,
+                        abs_tol = 1e-2,
                         control_numint = list(),
                         control_copulasso = list(),
                         verbose = FALSE,

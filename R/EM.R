@@ -30,7 +30,7 @@ EM <- function(data,
                  Omega = fit_copulasso$Omega,
                  Corr_star = fit_copulasso$Corr_star,
                  diff = rep(NA_real_, 4),
-                 logLik = NA_real_,
+                 logLik = -Inf,
                  time = Sys.time())
   if(fit_copulasso$copulasso_code != 0) {
     warning("Missing values in Omega estimation! (lambda to small?)")

@@ -554,10 +554,11 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
   coefs_spline <- matrix(NA_real_, nrow = 2, ncol = neval - 1)
   coefs_spline[2, ] <- 
     ((vals_spline * exp(knots_spline))[-1] - 
-       (vals_spline * exp(knots_spline))[-neval]) /
+      (vals_spline * exp(knots_spline))[-neval]) /
     knots_diff
   coefs_spline[1, ] <- 
     (vals_spline * exp(knots_spline))[-neval] - 
+    knots_spline[-neval] * coefs_spline[2, ]
     
   integral_ea <- sum(coefs_spline[1, ] * knots_spline[-1] +
                        coefs_spline[2, ] / 2 * knots_spline[-1]^2 -

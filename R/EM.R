@@ -93,22 +93,14 @@ EM <- function(data,
                        sigma = fit_sigmas,
                        Sigma = fit_copulasso$Sigma,
                        Omega = fit_copulasso$Omega,
-                       Corr_star = fit_copulasso$Corr_star)
-    diff_abs <- vapply(
-      c("sigma", "Corr_star"), 
-      function(i_param)
-        get_diff(params_new[[i_param]], params[[i_param]], 
-                 denom_c = control$abs_tol, method = "abs"),
-      0.0)
-    diff_rel <- vapply(
-      c("sigma", "Corr_star"), 
-      function(i_param)
-        get_diff(params_new[[i_param]], params[[i_param]], 
-                 denom_c = control$abs_tol, method = "rel"),
-      0.0)
+                       Corr_star = fit_copulasso$Corr_star,
+                       logLik = mean(e_asums[, "logLik"]))
+    diff_abs <- get_diff(params_new[["logLik"]], params[["logLik"]], 
+                         denom_c = control$abs_tol, method = "abs")
+    diff_rel <- get_diff(params_new[["logLik"]], params[["logLik"]], 
+                         denom_c = control$abs_tol, method = "rel")
     params <- c(params_new,
                 list(diff = c(diff_abs, diff_rel),
-                     logLik = mean(e_asums[, "logLik"]),
                      time = Sys.time()))
     ll_params[[i_iter]] <- params
     

@@ -551,18 +551,18 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
                                (vals_spline * knots_spline^2)[-neval])))
   
   # refit for ea
-  fit_lm <- 
-    lm(vals_spline * exp(knots_spline) ~ 
-         splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1))
-  coefs_spline <- 
-    SplinesUtils::RegBsplineAsPiecePoly(
-      fit_lm,
-      "splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1)",
-      shift = FALSE)$PiecePoly$coef
-  integral_ea <- sum(coefs_spline[1, ] / 3 * knots_spline[-1]^3 + 
-                       coefs_spline[2, ] / 4 * knots_spline[-1]^4 -
-                       coefs_spline[1, ] / 3 * knots_spline[-neval]^3 -
-                       coefs_spline[2, ] / 4 * knots_spline[-neval]^4)
+  coefs_spline <- matrix(NA_real_, nrow = 2, ncol = neval - 1)
+  coefs_spline[2, ] <- 
+    ((vals_spline * exp(knots_spline))[-1] - 
+       (vals_spline * exp(knots_spline))[-neval]) /
+    knots_diff
+  coefs_spline[1, ] <- 
+    (vals_spline * exp(knots_spline))[-neval] - 
+    
+  integral_ea <- sum(coefs_spline[1, ] * knots_spline[-1] +
+                       coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
+                       coefs_spline[1, ] * knots_spline[-neval] - 
+                       coefs_spline[2, ] / 2 * knots_spline[-neval]^2)
   error_ea <-  sum(abs(knots_diff *
                          ((vals_spline * exp(knots_spline))[-1] - 
                             (vals_spline * exp(knots_spline))[-neval])))

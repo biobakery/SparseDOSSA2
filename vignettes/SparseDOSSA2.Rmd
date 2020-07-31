@@ -27,13 +27,11 @@ knitr::opts_chunk$set(cache = FALSE)
 `SparseDOSSA2` is an R package for fitting and simulation of realistic microbial abundance observations.
 
 ```{r, message=FALSE}
-# library(SparseDOSSA2)
-# # tidyverse packages for utilities
-# library(magrittr)
-# library(dplyr)
-# library(ggplot2)
-
-smar::sourceDir("R/")
+library(SparseDOSSA2)
+# tidyverse packages for utilities
+library(magrittr)
+library(dplyr)
+library(ggplot2)
 ```
 
 # Installation
@@ -101,7 +99,8 @@ SparseDOSSA2_simulation <- SparseDOSSA2(template = SparseDOSSA2_fit,
                                         n_feature = 200,
                                         spike_metadata = "abundance",
                                         control = list(verbose = TRUE))
-names(SparseDOSSA_simulation)
+names(SparseDOSSA2_simulation)
+head(SparseDOSSA2_simulation$spike_metadata$feature_metadata_spike_df)
 ```
 
 # Flexible parallelization controls with `future`

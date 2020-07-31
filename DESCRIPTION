@@ -15,7 +15,8 @@ Depends:
   mvtnorm,
   huge,
   future.apply,
-  magrittr
+  magrittr,
+  truncnorm
 Suggests:
   cubature,
   testthat (>= 2.1.0)

@@ -40,6 +40,8 @@ SparseDOSSA2 is a Bioconductor package and can be installed via the following
 command.
 
 ```{r Installation, eval = FALSE}
+# devtools::install_github("biobakery/SparseDOSSA2")
+
 # if (!requireNamespace("BiocManager", quietly = TRUE))
 #     install.packages("BiocManager")
 # BiocManager::install("SparseDOSSA2")

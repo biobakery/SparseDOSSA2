@@ -1,26 +1,26 @@
----
-title: "Simulating realistic microbial observations with SparseDOSSA2"
-author: 
-- name: "Siyuan Ma"
-  affiliation: 
-  - Harvard T.H. Chan School of Public Health
-  - Broad Institute
-  email: siyuanma@g.harvard.edu
-package: SparseDOSSA2
-date: "07/10/2020"
-output: 
-  BiocStyle::html_document
-vignette: >
-  %\VignetteIndexEntry{SparseDOSSA2}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}  
-# bibliography: references.bib
----
+<!-- # --- -->
+<!-- title: "Simulating realistic microbial observations with SparseDOSSA2" -->
+<!-- author:  -->
+<!-- - name: "Siyuan Ma" -->
+  <!-- affiliation:  -->
+  <!-- - Harvard T.H. Chan School of Public Health -->
+  <!-- - Broad Institute -->
+  <!-- email: siyuanma@g.harvard.edu -->
+<!-- package: SparseDOSSA2 -->
+<!-- date: "07/10/2020" -->
+<!-- output:  -->
+  <!-- BiocStyle::html_document -->
+<!-- vignette: > -->
+  <!-- %\VignetteIndexEntry{SparseDOSSA2} -->
+  <!-- %\VignetteEngine{knitr::rmarkdown} -->
+  <!-- %\VignetteEncoding{UTF-8}   -->
+<!-- bibliography: references.bib -->
+<!-- --- -->
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(cache = FALSE)
-```
+<!-- # ```{r setup, include=FALSE} -->
+<!-- knitr::opts_chunk$set(echo = TRUE) -->
+<!-- knitr::opts_chunk$set(cache = FALSE) -->
+<!-- ``` -->
 
 # Introduction
 
@@ -36,20 +36,16 @@ library(ggplot2)
 
 # Installation
 
-SparseDOSSA2 is a Bioconductor package and can be installed via the following 
-command.
+SparseDOSSA2 is available through GitHub as of now and can be installed via the 
+following command.
 
 ```{r Installation, eval = FALSE}
-# devtools::install_github("biobakery/SparseDOSSA2")
-
-# if (!requireNamespace("BiocManager", quietly = TRUE))
-#     install.packages("BiocManager")
-# BiocManager::install("SparseDOSSA2")
+devtools::install_github("biobakery/SparseDOSSA2")
 ```
 
 # Input data
 
-As input, `MMUPHin` requires a feature-by-sample abundance table of microbial 
+As input, `SparseDOSSA2` requires a feature-by-sample abundance table of microbial 
 abundance observations. They can be either count or on the relative abundance
 scale.
 
@@ -59,9 +55,9 @@ data("HMP_stool", package = "SparseDOSSA2")
 stool[1:5, 1, drop = FALSE]
 ```
 
-# Fitting SparseDOSSA2 model with `SparseDOSSA2_fit`
+# Fitting SparseDOSSA2 model with `fit_SparseDOSSA2`
 
-`SparseDOSSA2_fit` fits the SparseDOSSA2 hierarchical model to estimate the 
+`fit_SparseDOSSA2` fits the SparseDOSSA2 hierarchical model to estimate the 
 model parameters: per-feature prevalence, and mean and standard deviation of 
 non-zero abundances. It also estimates joint distribution of these parameters
 and (if input is count) a read count distribution.
@@ -72,13 +68,13 @@ SparseDOSSA2_fit <- fit_SparseDOSSA2(data = stool,
 names(SparseDOSSA2_fit)
 ```
 
-# Fitting SparseDOSSA2 model with `SparseDOSSA2_fit`
+# Fitting SparseDOSSA2 model with `fitCV_SparseDOSSA2`
 
 The user can additionally achieve optimal model fitting via 
-`SparseDOSSA2_fit_CV`. They can either provide a vector of tuning parameter
+`fitCV_SparseDOSSA2`. They can either provide a vector of tuning parameter
 values (`lambdas`) to control sparsity in the estimation of the correlation
 matrix parameter, or a grid will be selected automatically. 
-`SparseDOSSA2_fit_CV` uses cross validation to select an "optimal" model fit
+`fitCV_SparseDOSSA2` uses cross validation to select an "optimal" model fit
 across these tuning parameters via average testing log-likelihood. This is a 
 computationally intensive procedure, and best-suited for users that would like
 accurate fitting to the input dataset, for best simulated new microbial 
@@ -93,7 +89,7 @@ SparseDOSSA2_CVfit <- fitCV_SparseDOSSA2(data = stool,
 names(SparseDOSSA2_CVfit)
 ```
 
-# Simulating realistic microbial observations with `SparseDOSSA2_generate`
+# Simulating realistic microbial observations with `SparseDOSSA2`
 ```{r SparseDOSSA2_generate}
 SparseDOSSA2_simulation <- SparseDOSSA2(template = SparseDOSSA2_fit,
                                         new_features = TRUE,
@@ -105,7 +101,7 @@ names(SparseDOSSA2_simulation)
 head(SparseDOSSA2_simulation$spike_metadata$feature_metadata_spike_df)
 ```
 
-# Flexible parallelization controls with `future`
+# Parallelization controls with `future`
 
 ```{r future}
 # future::plan(future::sequential, future::multicore)

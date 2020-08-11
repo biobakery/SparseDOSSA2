@@ -4,6 +4,12 @@ integrate2 <- function(f,
                        method, 
                        offset = FALSE, 
                        ...) {
+  if(lower == 0 & upper == 0)
+    return(list(integral = 0,
+                error = 0,
+                neval = 0,
+                returnCode = 1))
+  
   if(offset)
     val_offset <- f((lower + upper) / 2, ...)
   else
@@ -48,6 +54,12 @@ integrate2 <- function(f,
       coefs_spline[1, ] <- 
         vals_spline[-neval] - knots_spline[-neval] * coefs_spline[2, ]
       
+      if(all(coefs_spline == 0))
+         return(list(integral = 0,
+                     error = 0,
+                     neval = neval,
+                     returnCode = 1))
+      
       integral <- sum(coefs_spline[1, ] * knots_spline[-1] +
                            coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
                            coefs_spline[1, ] * knots_spline[-neval] - 
@@ -68,7 +80,7 @@ integrate2 <- function(f,
 
 
 get_intLimits <- function(x, pi0, mu, sigma, Omega, Sigma,
-                          n_vals = 5, step_size = 2, maxit = 4) {
+                          maxit = 10) {
   ind_nonzero <- x != 0
   logx <- log(x[ind_nonzero])
   mat_range <- cbind(mu[ind_nonzero] - logx - sqrt(2000)*sigma[ind_nonzero],
@@ -80,14 +92,14 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega, Sigma,
     return(c(0, 0)) ## FIXME??
   
   i_iter <- 1
-  vlim <- seq(from = range[1], to = range[2], length.out = n_vals)
+  vlim <- seq(from = range[1], to = range[2], length.out = 3)
   vval <- sapply(vlim,
                  function(vv)
                    dloga(a = a(x, exp(vv)),
                          pi0 = pi0, mu = mu, sigma = sigma,
                          Omega = Omega, Sigma = Sigma))
   while(TRUE) {
-    vflag <- vval > -750
+    vflag <- vval > -745
     if(vflag[1] | rev(vflag)[1])
       stop("Positive dx values at integration limits!")
     if(sum(vflag) > 1)
@@ -95,43 +107,44 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega, Sigma,
                     max(which(vflag)) + 1)])
     
     if(i_iter + 1 > maxit)
-      return(c(0, 0)) ## FIXME??
+      return(range(vlim)) ## FIXME??
     i_iter <- i_iter + 1
     
-    if(sum(vflag) == 1) {
-      vlim <- vlim[seq(which(vflag) - 1,
-                       which(vflag) + 1)]
-      vval <- vval[seq(which(vflag) - 1,
-                       which(vflag) + 1)]
-      n_vals <- 3
+    if(all(vval == -Inf)) {
+      vlim <- c(range[1],
+                sort(runif(3, min = range[1], max = range[2])),
+                range[2])
+      vval <- c(-Inf,
+                sapply(vlim,
+                     function(vv)
+                       dloga(a = a(x, exp(vv)),
+                             pi0 = pi0, mu = mu, sigma = sigma,
+                             Omega = Omega, Sigma = Sigma)),
+                -Inf)
+    } else {
+      ind_max <- order(-vval)[1]
+      if(ind_max == 1) ind_max <- 2
+      if(ind_max == length(vlim)) ind_max <- length(vlim) - 1
+      vlim <- vlim[seq(ind_max - 1, 
+                       ind_max + 1)]
+      vval <- vval[seq(ind_max - 1, 
+                       ind_max + 1)]
+      
+      vlim <- c(vlim[1],
+                mean(vlim[seq(1, 2)]), 
+                vlim[2], 
+                mean(vlim[seq(2, 3)]),
+                vlim[3])
+      vval <- c(vval[1],
+                dloga(a = a(x, exp(vlim[2])),
+                      pi0 = pi0, mu = mu, sigma = sigma,
+                      Omega = Omega, Sigma = Sigma),
+                vval[2],
+                dloga(a = a(x, exp(vlim[4])),
+                      pi0 = pi0, mu = mu, sigma = sigma,
+                      Omega = Omega, Sigma = Sigma),
+                vval[3])
     }
-    
-    l_vlim_new <- lapply(
-      seq_len(n_vals - 1),
-      function(i_val) 
-        seq(from = vlim[i_val],
-            to = vlim[i_val + 1],
-            length.out = step_size + 1)[-c(1, step_size + 1)])
-    l_vval_new <- lapply(
-      l_vlim_new,
-      function(i_vlim)
-        sapply(i_vlim,
-               function(vv)
-                 dloga(a = a(x, exp(vv)),
-                       pi0 = pi0, mu = mu, sigma = sigma,
-                       Omega = Omega, Sigma = Sigma)))
-    vlim <- c(vlim[1],
-              unlist(lapply(seq_len(n_vals - 1),
-                            function(i_val)
-                              c(l_vlim_new[[i_val]], 
-                                vlim[i_val + 1]))))
-    vval <- c(vval[1],
-              unlist(lapply(seq_len(n_vals - 1),
-                            function(i_val)
-                              c(l_vval_new[[i_val]], 
-                                vval[i_val + 1]))))
-    
-    n_vals <- length(vlim)
   }
 }
 

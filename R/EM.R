@@ -236,15 +236,18 @@ EM_CV <- function(data,
            })
   ll_fits_CV <- lapply(ll_results_CV, function(results_k) results_k$l_fits)
 
-  return(list(fit = l_fits_full[[order(apply(-logLik_CV, 
-                                             2, 
-                                             mean, 
-                                             na.rm = TRUE))[1]]]$fit,
+  return(list(fit = 
+                l_fits_full[[
+                  order(
+                    apply(-logLik_CV, 
+                          2, 
+                          function(x)
+                            mean(setdiff(x, Inf))))[1]]]$fit,
               lambdas = lambdas,
               logLik_CV = logLik_CV,
               l_fits_full = l_fits_full,
               CV_folds = CV_folds,
               ll_fits_CV = ll_fits_CV,
               l_filtering = l_filtering
-    ))
+  ))
 }

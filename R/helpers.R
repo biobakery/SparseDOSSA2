@@ -128,7 +128,9 @@ a_to_g <- function(a, pi0, mu, sigma) {
   
   to_return <- u <- a_to_u_marg(a, pi0, mu, sigma)
   to_return[ind_nonzero] <- qnorm(u[ind_nonzero])
-  to_return[!ind_nonzero] <- - mean(to_return[ind_nonzero]) * (1 - pi0) / pi0
+  to_return[!ind_nonzero] <- 
+    -mean(to_return[ind_nonzero]) * 
+    sum(ind_nonzero) / sum(1 - ind_nonzero)
   
   return(to_return)
 }

@@ -7,9 +7,7 @@ dx <- function(x,
     limits <- get_intLimits(
       x = x,
       pi0 = pi0, mu = mu, sigma = sigma, 
-      Omega = Omega, Sigma = Sigma,
-      n_vals = round(control$n_vals_limits / 2), 
-      step_size = control$step_size_limits, 
+      Omega = Omega, Sigma = Sigma, 
       maxit = control$maxit_limits)
     
     control$lower_loga <- limits[1]
@@ -43,9 +41,7 @@ control_integrate <- function(rel_tol = 1e-2,
                               abs_tol = 0,
                               max_eval = 50,
                               method = "spline",
-                              step_size_limits = 2, 
-                              n_vals_limits = 10,
-                              maxit_limits = 4,
+                              maxit_limits = 10,
                               limit_tol = 1e-5,
                               offset = FALSE, 
                               lower_loga = NULL,
@@ -62,8 +58,6 @@ control_integrate <- function(rel_tol = 1e-2,
        offset = offset,
        jacobian = jacobian,
        only_value = only_value,
-       n_vals_limits = n_vals_limits,
-       step_size_limits = step_size_limits, 
        maxit_limits = maxit_limits)
 }
 
@@ -206,14 +200,23 @@ dloga <- function(a,
   ind_nonzero <- a > 0
   if(any(abs(g) == Inf)) {
     log_d <- -Inf
+  } else if (all(Sigma[lower.tri(Sigma)] == 0)) {
+    log_d <- 
+      sum(log(pi0[!ind_nonzero])) +
+      sum(log(1 - pi0[ind_nonzero])) +
+      sum(dnorm(log(a[ind_nonzero]), 
+                mean = mu[ind_nonzero],
+                sd = sigma[ind_nonzero],
+                log = TRUE))
   } else if(all(ind_nonzero)) {
     log_d <- 
       mvtnorm::dmvnorm(x = g,
-                       mean = rep(0, length(g)),
+                       mean = rep(0, length = length(pi0)),
                        sigma = Sigma,
                        log = TRUE) +
       sum(g^2) / 2 -
-      sum((log(a) - mu)^2 / (sigma)^2 / 2) - 
+      sum((log(a) - mu)^2 / 
+            sigma^2 / 2) - 
       sum(log(sigma)) + 
       sum(log(1 - pi0))
   } else if(!any(ind_nonzero)) {
@@ -306,8 +309,6 @@ ea <- function(x,
       x = x,
       pi0 = pi0, mu = mu, sigma = sigma, 
       Omega = Omega, Sigma = Sigma,
-      n_vals = round(control$n_vals_limits / 2), 
-      step_size = control$step_size_limits, 
       maxit = control$maxit_limits)
     
     control$lower_loga <- limits[1]
@@ -357,8 +358,6 @@ eloga <- function(x,
       x = x,
       pi0 = pi0, mu = mu, sigma = sigma, 
       Omega = Omega, Sigma = Sigma,
-      n_vals = round(control$n_vals_limits / 2), 
-      step_size = control$step_size_limits, 
       maxit = control$maxit_limits)
     
     control$lower_loga <- limits[1]
@@ -407,8 +406,6 @@ eloga2 <- function(x,
       x = x,
       pi0 = pi0, mu = mu, sigma = sigma, 
       Omega = Omega, Sigma = Sigma,
-      n_vals = round(control$n_vals_limits / 2), 
-      step_size = control$step_size_limits, 
       maxit = control$maxit_limits)
     
     control$lower_loga <- limits[1]
@@ -457,16 +454,7 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
     x = x,
     pi0 = pi0, mu = mu, sigma = sigma, 
     Omega = Omega, Sigma = Sigma,
-    n_vals = round(control$n_vals_limits / 2), 
-    step_size = control$step_size_limits, 
     maxit = control$maxit_limits)
-  # 
-  # limits <- get_intLimits(
-  #   x = data[i_sample, , drop = TRUE],
-  #   pi0 = params$pi0, mu = params$mu, sigma = params$sigma, 
-  #   Omega = params$Omega, Sigma = params$Sigma,
-  #   control = control)
-  # control <- do.call(control_integrate, control)
   
   neval <- 2
   knots_spline <- c(limits[1], limits[2])

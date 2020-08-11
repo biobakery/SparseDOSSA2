@@ -5,10 +5,14 @@ copulasso <- function(data, marginals,
   if(ncol(data) != nrow(marginals))
     stop("Dimension of data and marginals do not agree!")
   
-  if(is.null(lambda)) {
+  if(lambda >= 1) {
     Omega <- 
       Sigma <- 
       Corr_star <- diag(1, ncol(data))
+    return(list(Omega = Omega,
+                Sigma = Sigma,
+                Corr_star = Corr_star,
+                copulasso_code = 0))
   } else {
     data_g <- vapply(seq_len(ncol(data)),
                      function(i_feature)

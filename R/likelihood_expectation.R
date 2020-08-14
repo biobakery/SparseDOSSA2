@@ -24,10 +24,9 @@ dx <- function(x,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
-  if(control$jacobian) {
-    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
-    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
-  }
+  # jacobian
+  fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
+  fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   
   if(log.p) 
     return(log(fit_integrate$integral))
@@ -46,7 +45,6 @@ control_integrate <- function(rel_tol = 1e-2,
                               offset = FALSE, 
                               lower_loga = NULL,
                               upper_loga = NULL,
-                              jacobian = FALSE,
                               only_value = TRUE) {
   list(lower_loga = lower_loga,
        upper_loga = upper_loga,
@@ -56,7 +54,6 @@ control_integrate <- function(rel_tol = 1e-2,
        max_eval = max_eval,
        method = method,
        offset = offset,
-       jacobian = jacobian,
        only_value = only_value,
        maxit_limits = maxit_limits)
 }
@@ -325,10 +322,9 @@ ea <- function(x,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
-  if(control$jacobian) {
-    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
-    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
-  }
+  # jacobian
+  fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
+  fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   
   if(control$only_value)
     return(fit_integrate$integral)
@@ -374,10 +370,9 @@ eloga <- function(x,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
  
-  if(control$jacobian) {
-    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
-    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
-  }
+  # jacobian
+  fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
+  fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   
   if(control$only_value)
     return(fit_integrate$integral)
@@ -422,10 +417,9 @@ eloga2 <- function(x,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
  
-  if(control$jacobian) {
-    fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
-    fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
-  }
+  # jacobian
+  fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
+  fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
   
   if(control$only_value)
     return(fit_integrate$integral)

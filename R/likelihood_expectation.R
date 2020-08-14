@@ -25,15 +25,18 @@ dx <- function(x,
                Omega = Omega, Sigma = Sigma)
   
   # jacobian
-  fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
-  fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
+  fit_integrate$integral <- log(fit_integrate$integral) - sum(log(x[x > 0]))
+  fit_integrate$error <- exp(log(fit_integrate$error) -  sum(log(x[x > 0])))
   
-  if(log.p) 
-    return(log(fit_integrate$integral))
-  if(control$only_value)
+  if(log.p) {
     return(fit_integrate$integral)
-  else
+  }
+  else {
+    fit_integrate$integral <- exp(fit_integrate$integral)
+    if(control$only_value)
+      return(exp(fit_integrate$integral))
     return(fit_integrate)
+  }
 }
 
 control_integrate <- function(rel_tol = 1e-2,
@@ -323,13 +326,18 @@ ea <- function(x,
                Omega = Omega, Sigma = Sigma)
   
   # jacobian
-  fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
-  fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
+  fit_integrate$integral <- log(fit_integrate$integral) - sum(log(x[x > 0]))
+  fit_integrate$error <- exp(log(fit_integrate$error) -  sum(log(x[x > 0])))
   
-  if(control$only_value)
+  if(log.p) {
     return(fit_integrate$integral)
-  else
+  }
+  else {
+    fit_integrate$integral <- exp(fit_integrate$integral)
+    if(control$only_value)
+      return(exp(fit_integrate$integral))
     return(fit_integrate)
+  }
 }
 
 integrand_ea <- function(log_asum, x, 
@@ -371,13 +379,18 @@ eloga <- function(x,
                Omega = Omega, Sigma = Sigma)
  
   # jacobian
-  fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
-  fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
+  fit_integrate$integral <- log(fit_integrate$integral) - sum(log(x[x > 0]))
+  fit_integrate$error <- exp(log(fit_integrate$error) -  sum(log(x[x > 0])))
   
-  if(control$only_value)
+  if(log.p) {
     return(fit_integrate$integral)
-  else
+  }
+  else {
+    fit_integrate$integral <- exp(fit_integrate$integral)
+    if(control$only_value)
+      return(exp(fit_integrate$integral))
     return(fit_integrate)
+  }
 }
 
 integrand_eloga <- function(log_asum, x, 
@@ -418,13 +431,18 @@ eloga2 <- function(x,
                Omega = Omega, Sigma = Sigma)
  
   # jacobian
-  fit_integrate$integral <- fit_integrate$integral / prod(x[x > 0])
-  fit_integrate$error <- fit_integrate$error / prod(x[x > 0])
+  fit_integrate$integral <- log(fit_integrate$integral) - sum(log(x[x > 0]))
+  fit_integrate$error <- exp(log(fit_integrate$error) -  sum(log(x[x > 0])))
   
-  if(control$only_value)
+  if(log.p) {
     return(fit_integrate$integral)
-  else
+  }
+  else {
+    fit_integrate$integral <- exp(fit_integrate$integral)
+    if(control$only_value)
+      return(exp(fit_integrate$integral))
     return(fit_integrate)
+  }
 }
 
 integrand_eloga2 <- function(log_asum, x, 

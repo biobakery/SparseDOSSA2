@@ -35,21 +35,13 @@ copulasso <- function(data, marginals,
       z <- seq_len(nrow(S))
     q <- length(z)
     if (q > 0) {
-      if(control$penalize_method == "huge_conditioned") {
-        S_conditioned <- condition_ridge(S[z, z, drop = FALSE],
-                                         lambda = 1e-6,
+      S_conditioned <- condition_ridge(S[z, z, drop = FALSE],
+                                         lambda = control$lambda_ridge,
                                          method = "ridge1")
         out.glasso <- huge::huge.glasso(x = S_conditioned,
                                         lambda = lambda,
                                         verbose = FALSE)
         Omega[z, z] <- out.glasso$icov[[1]]
-      }
-      if(control$penalize_method %in% c("ridge1", "ridge2")) {
-        out.glasso <- solve_ridge(S[z, z, drop = FALSE],
-                                  lambda,
-                                  method = penalize_method)
-        Omega[z, z] <- out.glasso
-      }
     }
   }
   
@@ -81,13 +73,13 @@ copulasso <- function(data, marginals,
               copulasso_code = 0))
 }
 
-control_copulasso <- function(penalize_method = "huge_conditioned",
-                              threshold_zero = 1e-16,
+control_copulasso <- function(lambda_ridge = 1e-6,
+                              threshold_zero = 1e-6,
                               simplify = FALSE,
                               symm = TRUE,
                               corr = TRUE,
                               debug_dir = NULL) {
-  list(penalize_method = penalize_method,
+  list(lambda_ridge = lambda_ridge,
        threshold_zero = threshold_zero,
        simplify = simplify,
        symm = symm,

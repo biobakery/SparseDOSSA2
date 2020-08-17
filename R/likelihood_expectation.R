@@ -200,14 +200,6 @@ dloga <- function(a,
   ind_nonzero <- a > 0
   if(any(abs(g) == Inf)) {
     log_d <- -Inf
-  } else if (all(Sigma[lower.tri(Sigma)] == 0)) {
-    log_d <- 
-      sum(log(pi0[!ind_nonzero])) +
-      sum(log(1 - pi0[ind_nonzero])) +
-      sum(dnorm(log(a[ind_nonzero]), 
-                mean = mu[ind_nonzero],
-                sd = sigma[ind_nonzero],
-                log = TRUE))
   } else if(all(ind_nonzero)) {
     log_d <- 
       mvtnorm::dmvnorm(x = g,
@@ -221,20 +213,22 @@ dloga <- function(a,
       sum(log(1 - pi0))
   } else if(!any(ind_nonzero)) {
     log_d <- 
-      log(mvtnorm::pmvnorm(
+      pmvnorm2(
         lower = -Inf, 
         upper = g, 
         mean = rep(0, length(g)),
-        sigma = Sigma))
+        sigma = Sigma, 
+        log.p = TRUE)
   } else {
     log_d <- 
-      log(mvtnorm::pmvnorm(
+      pmvnorm2(
         lower = -Inf, 
         upper = g[!ind_nonzero], 
         mean = (-solve(Omega[!ind_nonzero, !ind_nonzero, drop = FALSE],
                        Omega[!ind_nonzero, ind_nonzero, drop = FALSE]) %*% 
                   g[ind_nonzero])[, 1],
-        sigma = solve(Omega[!ind_nonzero, !ind_nonzero, drop = FALSE]))) +
+        sigma = solve(Omega[!ind_nonzero, !ind_nonzero, drop = FALSE]),
+        log.p = TRUE) +
       mvtnorm::dmvnorm(x = g[ind_nonzero],
                        mean = rep(0, length = sum(ind_nonzero)),
                        sigma = Sigma[ind_nonzero, ind_nonzero, drop = FALSE],
@@ -250,6 +244,36 @@ dloga <- function(a,
     return(log_d)
   else
     return(exp(log_d))
+}
+
+pmvnorm2 <- function(lower = -Inf, upper = Inf, 
+                     mean, sigma, log.p = FALSE) {
+  if(length(lower) == 1)
+    lower <- rep(lower, times = length(mean))
+  if(length(upper) == 1)
+    upper <- rep(upper, times = length(mean))
+  
+  g <- igraph::graph_from_adjacency_matrix(
+    adjmatrix = (abs(sigma) > 0) * 1,
+    mode = "undirected",
+    diag = FALSE
+  )
+  comp <- igraph::components(g)
+  vp <- 
+    vapply(seq_len(comp$no),
+           function(i_comp) {
+             i_ind <- comp$membership == i_comp
+             log(mvtnorm::pmvnorm(lower = lower[i_ind],
+                                  upper = upper[i_ind],
+                                  mean = mean[i_ind],
+                                  sigma = sigma[i_ind, i_ind, drop = FALSE]))
+           },
+           0.0)
+  logp <- sum(vp)
+  if(log.p)
+    return(logp)
+  else
+    return(exp(logp))
 }
 
 dloga_old <- function(a,

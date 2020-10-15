@@ -36,12 +36,12 @@ copulasso <- function(data, marginals,
     q <- length(z)
     if (q > 0) {
       S_conditioned <- condition_ridge(S[z, z, drop = FALSE],
-                                         lambda = control$lambda_ridge,
-                                         method = "ridge1")
-        out.glasso <- huge::huge.glasso(x = S_conditioned,
-                                        lambda = lambda,
-                                        verbose = FALSE)
-        Omega[z, z] <- out.glasso$icov[[1]]
+                                       lambda = control$lambda_ridge,
+                                       method = "ridge1")
+      out.glasso <- huge::huge.glasso(x = S_conditioned,
+                                      lambda = lambda,
+                                      verbose = FALSE)
+      Omega[z, z] <- out.glasso$icov[[1]]
     }
   }
   

@@ -157,20 +157,20 @@ a <- function(x, asum) {
   return(a)
 }
 
-get_sigmas <- function(data, eloga, eloga2, mu) {
-  sigmas <- 
-    vapply(seq_len(ncol(data)),
-           function(i_feature) {
-             ind_samples <- data[, i_feature] > 0
-             sqrt(mean(eloga2[ind_samples] - 
-                         2 * eloga[ind_samples] * 
-                         (mu[i_feature] - log(data[ind_samples, i_feature])) +
-                         (mu[i_feature] - log(data[ind_samples, i_feature]))^2))
-           },
-           0.0)
-  names(sigmas) <- colnames(data)
-  return(sigmas)
-}
+# get_sigmas <- function(data, eloga, eloga2, mu) {
+#   sigmas <- 
+#     vapply(seq_len(ncol(data)),
+#            function(i_feature) {
+#              ind_samples <- data[, i_feature] > 0
+#              sqrt(mean(eloga2[ind_samples] - 
+#                          2 * eloga[ind_samples] * 
+#                          (mu[i_feature] - log(data[ind_samples, i_feature])) +
+#                          (mu[i_feature] - log(data[ind_samples, i_feature]))^2))
+#            },
+#            0.0)
+#   names(sigmas) <- colnames(data)
+#   return(sigmas)
+# }
 
 # get_intLimits <- function(f, 
 #                           center = 0, limit_max, limit_min, step_size,

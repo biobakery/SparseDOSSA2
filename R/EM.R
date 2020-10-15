@@ -16,6 +16,7 @@ EM <- function(data,
   
   # initialize EM using relative abundances
   feature_param <- fit_featureParam(data)
+  feature_param[, "mu"] <- feature_param[, "mu"] - mean(feature_param[, "mu"])
   fit_copulasso <- copulasso(
     data = data, 
     marginals = feature_param,
@@ -36,7 +37,7 @@ EM <- function(data,
     warning("Missing values in Omega estimation! (lambda to small?)")
     return(list(lambda = lambda,
                 fit = params,
-                convergence = list(converge = converge,
+                convergence = list(converge = FALSE,
                                    converge_code = 4,
                                    n_iter = i_iter)))
   }
@@ -74,15 +75,24 @@ EM <- function(data,
     ll_easums[[i_iter]] <- e_asums
     
     ## M step
-    fit_sigmas <- get_sigmas(data = data, 
-                             eloga = e_asums[, "eloga"], 
-                             eloga2 = e_asums[, "eloga2"], 
-                             mu = feature_param[ ,"mu"])
-    feature_param[, "sigma"] <- fit_sigmas
+    mutilde <- get_mutilde(data = data,
+                           eloga = e_asums[, "eloga"])
+    sigma2tilde <- get_sigma2tilde(data = data,
+                                   eloga = e_asums[, "eloga"],
+                                   eloga2 = e_asums[, "eloga2"])
+    sigma2hat <- solve_sigma2(mutilde = mutilde, 
+                              sigma2tilde = sigma2tilde, 
+                              n_nonzero = apply(data > 0, 2, sum),
+                              control = control, 
+                              maxiter = 1000)
+    muhat <- solve_mu(mutilde = mutilde, 
+                      sigma2hat = sigma2hat)
     fit_copulasso <- copulasso(data = data * exp(e_asums[, "eloga"]), 
                                marginals = feature_param,
                                lambda = lambda,
                                control = control$control_copulasso)
+    feature_param[, "sigma"] <- sqrt(sigma2hat)
+    feature_param[, "mu"] <- muhat
     if(fit_copulasso$copulasso_code != 0) {
       warning("Missing values in Omega estimation! (lambda to small?)")
       converge_code <- 4
@@ -90,7 +100,7 @@ EM <- function(data,
     }
     params_new <- list(pi0 = feature_param[ ,"pi0"],
                        mu = feature_param[ ,"mu"],
-                       sigma = fit_sigmas,
+                       sigma = feature_param[ ,"sigma"],
                        Sigma = fit_copulasso$Sigma,
                        Omega = fit_copulasso$Omega,
                        Corr_star = fit_copulasso$Corr_star,

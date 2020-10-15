@@ -9,6 +9,7 @@ fit_featureParam <- function(data) {
   # with the overall median across features
   feature_param[is.na(feature_param[, "sigma"]), "sigma"] <- 
     median(feature_param[, "sigma"], na.rm = TRUE)
+  
   rownames(feature_param) <- colnames(data)
   return(feature_param)
 }

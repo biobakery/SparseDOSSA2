@@ -85,7 +85,7 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega, Sigma,
   logx <- log(x[ind_nonzero])
   mat_range <- cbind(mu[ind_nonzero] - logx - sqrt(2000)*sigma[ind_nonzero],
                      mu[ind_nonzero] - logx + sqrt(2000)*sigma[ind_nonzero])
-  range <- c(max(mat_range[, 1]), 
+  range <- c(max(c(mat_range[, 1], -745 - min(logx))), 
              min(mat_range[, 2]))
   
   if(range[1] >= range[2])
@@ -94,10 +94,10 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega, Sigma,
   i_iter <- 1
   vlim <- seq(from = range[1], to = range[2], length.out = 3)
   vval <- sapply(vlim,
-                 function(vv)
-                   dloga(a = a(x, exp(vv)),
-                         pi0 = pi0, mu = mu, sigma = sigma,
-                         Omega = Omega, Sigma = Sigma))
+                 function(vv) 
+                   dloga_asum(asum = exp(vv), x = x,
+                              pi0 = pi0, mu = mu, sigma = sigma,
+                              Omega = Omega, Sigma = Sigma))
   while(TRUE) {
     vflag <- vval > -745
     if(vflag[1] | rev(vflag)[1])
@@ -117,9 +117,9 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega, Sigma,
       vval <- c(-Inf,
                 sapply(vlim,
                      function(vv)
-                       dloga(a = a(x, exp(vv)),
-                             pi0 = pi0, mu = mu, sigma = sigma,
-                             Omega = Omega, Sigma = Sigma)),
+                       dloga_asum(asum = exp(vv), x = x,
+                                  pi0 = pi0, mu = mu, sigma = sigma,
+                                  Omega = Omega, Sigma = Sigma)),
                 -Inf)
     } else {
       ind_max <- order(-vval)[1]
@@ -136,47 +136,54 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega, Sigma,
                 mean(vlim[seq(2, 3)]),
                 vlim[3])
       vval <- c(vval[1],
-                dloga(a = a(x, exp(vlim[2])),
-                      pi0 = pi0, mu = mu, sigma = sigma,
-                      Omega = Omega, Sigma = Sigma),
+                dloga_asum(asum = exp(vlim[2]), x = x,
+                           pi0 = pi0, mu = mu, sigma = sigma,
+                           Omega = Omega, Sigma = Sigma),
                 vval[2],
-                dloga(a = a(x, exp(vlim[4])),
-                      pi0 = pi0, mu = mu, sigma = sigma,
-                      Omega = Omega, Sigma = Sigma),
+                dloga_asum(asum = exp(vlim[4]), x = x,
+                           pi0 = pi0, mu = mu, sigma = sigma,
+                           Omega = Omega, Sigma = Sigma),
                 vval[3])
     }
   }
 }
 
-get_intLimits2 <- function(x, pi0, mu, sigma, Omega, Sigma,
-                           control = list()) {
-  control <- do.call(control_integrate, control)
-  
-  limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma,
-                          Omega = Omega, Sigma = Sigma,
-                          n_vals = round(control$n_vals_limits / 2), 
-                          step_size = control$step_size_limits, 
-                          maxit = control$maxit_limits)
-  
-  vlim <- seq(limits[1], limits[2], length.out = control$n_vals_limits)
-  vval <- sapply(vlim,
-                 function(vv)
-                   dloga(a = a(x, exp(vv)),
-                         pi0 = pi0, mu = mu, sigma = sigma,
-                         Omega = Omega, Sigma = Sigma))
-  vlim <- vlim[vval > -Inf]
-  vval <- vval[vval > -Inf]
-  
-  coef_quad <- lm(vval ~ vlim + I(vlim^2))$coef
-  mu_integrand <- - coef_quad[2] / coef_quad[3] / 2
-  sigma_integrand <- sqrt(- 1 / coef_quad[3] / 2)
-  
-  return(mu_integrand + 
-           qnorm(c(control$limit_tol / 2, 
-                   1 - control$limit_tol / 2)) * 
-           sigma_integrand)
-  
+dloga_asum <- function(asum, x, pi0, mu, sigma, Omega, Sigma) {
+  if(asum * min(setdiff(x, 0)) <= 0)
+    return(-Inf)
+  if(asum > 0)
+    return(dloga(a(x, asum), pi0 = pi0, mu = mu, sigma = sigma, 
+                 Omega = Omega, Sigma = Sigma,
+                 log.p = TRUE))
 }
+
+# get_intLimits2 <- function(x, pi0, mu, sigma, Omega, Sigma,
+#                            control = list()) {
+#   control <- do.call(control_integrate, control)
+#   
+#   limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma,
+#                           Omega = Omega, Sigma = Sigma,
+#                           maxit = control$maxit_limits)
+#   
+#   vlim <- seq(limits[1], limits[2], length.out = control$n_vals_limits)
+#   vval <- sapply(vlim,
+#                  function(vv)
+#                    dloga(a = a(x, exp(vv)),
+#                          pi0 = pi0, mu = mu, sigma = sigma,
+#                          Omega = Omega, Sigma = Sigma))
+#   vlim <- vlim[vval > -Inf]
+#   vval <- vval[vval > -Inf]
+#   
+#   coef_quad <- lm(vval ~ vlim + I(vlim^2))$coef
+#   mu_integrand <- - coef_quad[2] / coef_quad[3] / 2
+#   sigma_integrand <- sqrt(- 1 / coef_quad[3] / 2)
+#   
+#   return(mu_integrand + 
+#            qnorm(c(control$limit_tol / 2, 
+#                    1 - control$limit_tol / 2)) * 
+#            sigma_integrand)
+#   
+# }
 
 get_offset <- function(x, 
                        pi0, mu, sigma, Omega,

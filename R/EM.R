@@ -75,29 +75,22 @@ EM <- function(data,
     ll_easums[[i_iter]] <- e_asums
     
     ## M step
-    mutilde <- get_mutilde(data = data,
-                           eloga = e_asums[, "eloga"])
-    sigma2tilde <- get_sigma2tilde(data = data,
-                                   eloga = e_asums[, "eloga"],
-                                   eloga2 = e_asums[, "eloga2"])
-    sigma2hat <- solve_sigma2(mutilde = mutilde, 
-                              sigma2tilde = sigma2tilde, 
-                              n_nonzero = apply(data > 0, 2, sum),
-                              control = control, 
-                              maxiter = 1000)
-    muhat <- solve_mu(mutilde = mutilde, 
-                      sigma2hat = sigma2hat)
+    muhat <- get_muhat(data = data,
+                       eloga = e_asums[, "eloga"])
+    sigmahat <- get_sigmahat(data = data,
+                             eloga = e_asums[, "eloga"],
+                             eloga2 = e_asums[, "eloga2"])
     fit_copulasso <- copulasso(data = data * exp(e_asums[, "eloga"]), 
                                marginals = feature_param,
                                lambda = lambda,
                                control = control$control_copulasso)
-    feature_param[, "sigma"] <- sqrt(sigma2hat)
-    feature_param[, "mu"] <- muhat
     if(fit_copulasso$copulasso_code != 0) {
       warning("Missing values in Omega estimation! (lambda to small?)")
       converge_code <- 4
       break
     }
+    feature_param[, "mu"] <- muhat
+    feature_param[, "sigma"] <- sigmahat
     params_new <- list(pi0 = feature_param[ ,"pi0"],
                        mu = feature_param[ ,"mu"],
                        sigma = feature_param[ ,"sigma"],

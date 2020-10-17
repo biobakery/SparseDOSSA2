@@ -75,11 +75,6 @@ EM <- function(data,
     ll_easums[[i_iter]] <- e_asums
     
     ## M step
-    muhat <- get_muhat(data = data,
-                       eloga = e_asums[, "eloga"])
-    sigmahat <- get_sigmahat(data = data,
-                             eloga = e_asums[, "eloga"],
-                             eloga2 = e_asums[, "eloga2"])
     fit_copulasso <- copulasso(data = data * exp(e_asums[, "eloga"]), 
                                marginals = feature_param,
                                lambda = lambda,
@@ -89,7 +84,9 @@ EM <- function(data,
       converge_code <- 4
       break
     }
-    feature_param[, "mu"] <- muhat
+    sigmahat <- get_sigmahat(data = data,
+                             eloga = e_asums[, "eloga"],
+                             eloga2 = e_asums[, "eloga2"])
     feature_param[, "sigma"] <- sigmahat
     params_new <- list(pi0 = feature_param[ ,"pi0"],
                        mu = feature_param[ ,"mu"],

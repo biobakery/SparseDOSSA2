@@ -233,7 +233,7 @@ make_CVfolds <- function(n, K) {
 }
 
 filter_data <- function(data, 
-                        k_feature = 1, k_sample = 1,
+                        k_feature = 2, k_sample = 1,
                         maxit = 3) {
   i_iter <- 0
   ind_feature <- rep(TRUE, ncol(data))

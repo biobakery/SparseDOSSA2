@@ -1,6 +1,7 @@
 integrate2 <- function(f, 
                        lower, upper, 
                        rel_tol, abs_tol, max_eval, 
+                       precBits,
                        method, 
                        offset = FALSE, 
                        ...) {
@@ -28,17 +29,22 @@ integrate2 <- function(f,
   } else if (method == "spline") {
     
     neval <- 2
-    knots_spline <- c(lower, upper)
-    vals_spline <- ff(knots_spline)
+    knots_spline <- Rmpfr::mpfr(c(lower, upper),
+                                precBits = precBits)
+    vals_spline <- 
+      Rmpfr::mpfr(
+        ff(as.double(knots_spline)), 
+        precBits = precBits)
     errors_spline <- Inf
     
     while(TRUE) {
       i_max_error <- which(errors_spline == max(errors_spline))[1]
       knots_spline <- c(knots_spline[seq(1, i_max_error)],
-                        mean(knots_spline[c(i_max_error, i_max_error + 1)]),
+                        Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
                         knots_spline[seq(i_max_error + 1, neval)])
       vals_spline <- c(vals_spline[seq(1, i_max_error)],
-                       ff(knots_spline[i_max_error + 1]),
+                       Rmpfr::mpfr(ff(as.double(knots_spline[i_max_error + 1])),
+                                   precBits = precBits),
                        vals_spline[seq(i_max_error + 1, neval)])
       
       neval <- neval + 1
@@ -47,18 +53,13 @@ integrate2 <- function(f,
         abs(knots_diff *
               (vals_spline[-1] - vals_spline[-neval]))
       
-      coefs_spline <- matrix(NA_real_, nrow = 2, ncol = neval - 1) ## FIXME
+      coefs_spline <- Rmpfr::mpfrArray(NA, precBits = precBits,
+                                       dim = c(2, neval - 1))
       coefs_spline[2, ] <- 
         (vals_spline[-1] - vals_spline[-neval]) /
         knots_diff
       coefs_spline[1, ] <- 
         vals_spline[-neval] - knots_spline[-neval] * coefs_spline[2, ]
-      
-      if(all(coefs_spline == 0))
-         return(list(integral = 0,
-                     error = 0,
-                     neval = neval,
-                     returnCode = 1))
       
       integral <- sum(coefs_spline[1, ] * knots_spline[-1] +
                            coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
@@ -67,14 +68,19 @@ integrate2 <- function(f,
       
       error <- sum(errors_spline)
       
-      if(neval >= max_eval |
-         error / integral < rel_tol |
-         error < abs_tol)
-        return(list(integral = integral * val_offset,
-                    error = error * val_offset,
-                    neval = neval,
-                    returnCode = 0))
+      if(neval >= max_eval)
+        break
+      if(integral < 0)
+        stop("Negative integration values; something went wrong!")
+      if(integral > 0)
+        if(error / abs(integral) < rel_tol |
+           error < abs_tol)
+          break
     }
+    return(list(integral = integral * val_offset,
+                error = error * val_offset,
+                neval = neval,
+                returnCode = 0))
   }
 }
 
@@ -149,7 +155,7 @@ get_intLimits <- function(x, pi0, mu, sigma, Omega, Sigma,
 }
 
 dloga_asum <- function(asum, x, pi0, mu, sigma, Omega, Sigma) {
-  if(asum * min(setdiff(x, 0)) <= 0)
+  if(asum * min(x[x != 0]) <= 0)
     return(-Inf)
   if(asum > 0)
     return(dloga(a(x, asum), pi0 = pi0, mu = mu, sigma = sigma, 

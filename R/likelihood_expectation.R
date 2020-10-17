@@ -19,14 +19,15 @@ dx <- function(x,
                lower = control$lower_loga, upper = control$upper_loga, 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
+               precBits = control$precBits,
                method = control$method, 
                offset = control$offset,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
   # jacobian
-  fit_integrate$integral <- log(fit_integrate$integral) - sum(log(x[x > 0]))
-  fit_integrate$error <- exp(log(fit_integrate$error) -  sum(log(x[x > 0])))
+  fit_integrate$integral <- as.double(log(fit_integrate$integral) - sum(log(x[x > 0])))
+  fit_integrate$error <- as.double(exp(log(fit_integrate$error) -  sum(log(x[x > 0]))))
   
   if(log.p) {
     return(fit_integrate$integral)
@@ -34,7 +35,7 @@ dx <- function(x,
   else {
     fit_integrate$integral <- exp(fit_integrate$integral)
     if(control$only_value)
-      return(exp(fit_integrate$integral))
+      return(fit_integrate$integral)
     return(fit_integrate)
   }
 }
@@ -45,6 +46,7 @@ control_integrate <- function(rel_tol = 1e-2,
                               method = "spline",
                               maxit_limits = 10,
                               limit_tol = 1e-5,
+                              precBits = 200,
                               offset = FALSE, 
                               lower_loga = NULL,
                               upper_loga = NULL,
@@ -53,6 +55,7 @@ control_integrate <- function(rel_tol = 1e-2,
        upper_loga = upper_loga,
        rel_tol = rel_tol,
        limit_tol = limit_tol,
+       precBits = precBits,
        abs_tol = abs_tol,
        max_eval = max_eval,
        method = method,
@@ -282,7 +285,7 @@ dloga_old <- function(a,
   u <- a_to_u_old(a,
                   pi0 = pi0, mu = mu, sigma = sigma)
   g <- qnorm(u)
-
+  
   if(any(abs(g) == Inf)) {
     log_d <- -Inf
   } else {
@@ -290,7 +293,7 @@ dloga_old <- function(a,
       sum((log(a[a > 0]) - mu[a > 0])^2 / (sigma[a > 0])^2 / 2) -
       log(2 * pi) / 2 * sum(a > 0) - sum(log(sigma[a > 0]))
   }
-
+  
   if(log.p)
     return(log_d)
   else
@@ -302,7 +305,7 @@ du <- function(g, Omega, log.p = TRUE) {
   if(any(g == -Inf | g == Inf)) return(-Inf)
   log_d <- log_dmvnorm(S = g %*% t(g), Omega = Omega) + sum(g^2)/2 +
     log(det(Omega)) / 2
-
+  
   if(log.p)
     return(log_d)
   else
@@ -350,8 +353,8 @@ ea <- function(x,
                Omega = Omega, Sigma = Sigma)
   
   # jacobian
-  fit_integrate$integral <- log(fit_integrate$integral) - sum(log(x[x > 0]))
-  fit_integrate$error <- exp(log(fit_integrate$error) -  sum(log(x[x > 0])))
+  fit_integrate$integral <- as.double(log(fit_integrate$integral) - sum(log(x[x > 0])))
+  fit_integrate$error <- as.double(exp(log(fit_integrate$error) -  sum(log(x[x > 0]))))
   
   if(log.p) {
     return(fit_integrate$integral)
@@ -359,7 +362,7 @@ ea <- function(x,
   else {
     fit_integrate$integral <- exp(fit_integrate$integral)
     if(control$only_value)
-      return(exp(fit_integrate$integral))
+      return(fit_integrate$integral)
     return(fit_integrate)
   }
 }
@@ -401,10 +404,10 @@ eloga <- function(x,
                offset = control$offset,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
- 
+  
   # jacobian
-  fit_integrate$integral <- log(fit_integrate$integral) - sum(log(x[x > 0]))
-  fit_integrate$error <- exp(log(fit_integrate$error) -  sum(log(x[x > 0])))
+  fit_integrate$integral <- as.double(log(fit_integrate$integral) - sum(log(x[x > 0])))
+  fit_integrate$error <- as.double(exp(log(fit_integrate$error) -  sum(log(x[x > 0]))))
   
   if(log.p) {
     return(fit_integrate$integral)
@@ -412,7 +415,7 @@ eloga <- function(x,
   else {
     fit_integrate$integral <- exp(fit_integrate$integral)
     if(control$only_value)
-      return(exp(fit_integrate$integral))
+      return(fit_integrate$integral)
     return(fit_integrate)
   }
 }
@@ -453,10 +456,10 @@ eloga2 <- function(x,
                offset = control$offset,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
- 
+  
   # jacobian
-  fit_integrate$integral <- log(fit_integrate$integral) - sum(log(x[x > 0]))
-  fit_integrate$error <- exp(log(fit_integrate$error) -  sum(log(x[x > 0])))
+  fit_integrate$integral <- as.double(log(fit_integrate$integral) - sum(log(x[x > 0])))
+  fit_integrate$error <- as.double(exp(log(fit_integrate$error) -  sum(log(x[x > 0]))))
   
   if(log.p) {
     return(fit_integrate$integral)
@@ -464,7 +467,7 @@ eloga2 <- function(x,
   else {
     fit_integrate$integral <- exp(fit_integrate$integral)
     if(control$only_value)
-      return(exp(fit_integrate$integral))
+      return(fit_integrate$integral)
     return(fit_integrate)
   }
 }
@@ -481,6 +484,15 @@ integrand_eloga2 <- function(log_asum, x,
 vintegrand_eloga2 <- Vectorize2(integrand_eloga2, 
                                 vectorize.args = "log_asum")
 
+#' Title
+#'
+#' @param x 
+#' @param pi0 
+#' @param mu 
+#' @param sigma 
+#' @param Omega 
+#' @param Sigma 
+#' @param control 
 get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
                    control) {
   time_start <- Sys.time()
@@ -493,23 +505,28 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
     maxit = control$maxit_limits)
   
   neval <- 2
-  knots_spline <- c(limits[1], limits[2])
-  vals_spline <- vintegrand_dx(knots_spline, 
-                               pi0 = pi0, x = x, mu = mu, sigma = sigma,
-                               Omega = Omega, Sigma = Sigma)
+  knots_spline <- Rmpfr::mpfr(c(limits[1], limits[2]),
+                              precBits = control$precBits)
+  vals_spline <- 
+    Rmpfr::mpfr(
+      vintegrand_dx(as.double(knots_spline), 
+                    pi0 = pi0, x = x, mu = mu, sigma = sigma,
+                    Omega = Omega, Sigma = Sigma), 
+      precBits = control$precBits)
   errors_spline <- Inf
   
   # find knots using dx
-  verrors <- c()
+  verrors <- Rmpfr::mpfr(c(), precBits = control$precBits)
   while(TRUE) {
     i_max_error <- which(errors_spline == max(errors_spline))[1]
     knots_spline <- c(knots_spline[seq(1, i_max_error)],
-                      mean(knots_spline[c(i_max_error, i_max_error + 1)]),
+                      Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
                       knots_spline[seq(i_max_error + 1, neval)])
     vals_spline <- c(vals_spline[seq(1, i_max_error)],
-                     vintegrand_dx(knots_spline[i_max_error + 1],
-                                   pi0 = pi0, x = x, mu = mu, sigma = sigma,
-                                   Omega = Omega, Sigma = Sigma),
+                     Rmpfr::mpfr(vintegrand_dx(as.double(knots_spline[i_max_error + 1]),
+                                               pi0 = pi0, x = x, mu = mu, sigma = sigma,
+                                               Omega = Omega, Sigma = Sigma),
+                                 precBits = control$precBits),
                      vals_spline[seq(i_max_error + 1, neval)])
     
     neval <- neval + 1
@@ -526,7 +543,8 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
     #     fit_lm,
     #     "splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1)",
     #     shift = FALSE)$PiecePoly$coef
-    coefs_spline <- matrix(NA_real_, nrow = 2, ncol = neval - 1) ## FIXME
+    coefs_spline <- Rmpfr::mpfrArray(NA, precBits = control$precBits,
+                                     dim = c(2, neval - 1))
     # for some reason linear spline coefs estimated from the spline functions
     # give negative knots function values (numerical underflow?)
     # Which can cause mathematically invalid integrations 
@@ -549,14 +567,15 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
     error_dx <- sum(errors_spline)
     verrors <- c(verrors, error_dx)
     
-    if(neval >= control$max_eval |
-       error_dx / abs(integral_dx) < control$rel_tol |
-       error_dx < control$abs_tol)
+    if(neval >= control$max_eval)
       break
+    if(integral_dx < 0)
+      stop("Negative integration values; something went wrong!")
+    if(integral_dx > 0) 
+      if(error_dx / abs(integral_dx) < control$rel_tol |
+         error_dx < control$abs_tol)
+        break
   }
-  
-  error_dx <- sum(errors_spline)
-  verrors <- c(verrors, error_dx)
   
   # modify eloga, eloga2
   integral_eloga <- sum(coefs_spline[1, ] / 2 * knots_spline[-1]^2 + 
@@ -575,15 +594,16 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
                                (vals_spline * knots_spline^2)[-neval])))
   
   # refit for ea
-  coefs_spline <- matrix(NA_real_, nrow = 2, ncol = neval - 1)
+  coefs_spline <- Rmpfr::mpfrArray(NA, precBits = control$precBits,
+                                   dim = c(2, neval - 1))
   coefs_spline[2, ] <- 
     ((vals_spline * exp(knots_spline))[-1] - 
-      (vals_spline * exp(knots_spline))[-neval]) /
+       (vals_spline * exp(knots_spline))[-neval]) /
     knots_diff
   coefs_spline[1, ] <- 
     (vals_spline * exp(knots_spline))[-neval] - 
     knots_spline[-neval] * coefs_spline[2, ]
-    
+  
   integral_ea <- sum(coefs_spline[1, ] * knots_spline[-1] +
                        coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
                        coefs_spline[1, ] * knots_spline[-neval] - 
@@ -592,15 +612,15 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
                          ((vals_spline * exp(knots_spline))[-1] - 
                             (vals_spline * exp(knots_spline))[-neval])))
   
-  return(c("ea" = integral_ea / integral_dx,
-           "dx" = integral_dx,
-           "logLik" = log(integral_dx) - sum(log(x[x > 0])),
-           "eloga" = integral_eloga / integral_dx,
-           "eloga2" = integral_eloga2 / integral_dx,
-           "error_ea" = error_ea,
-           "error_dx" = error_dx,
-           "error_eloga" = error_eloga,
-           "error_eloga2" = error_eloga2,
+  return(c("ea" = as.double(integral_ea / integral_dx),
+           "dx" = as.double(integral_dx),
+           "logLik" = as.double(log(integral_dx) - sum(log(x[x > 0]))),
+           "eloga" = as.double(integral_eloga / integral_dx),
+           "eloga2" = as.double(integral_eloga2 / integral_dx),
+           "error_ea" = as.double(error_ea),
+           "error_dx" = as.double(error_dx),
+           "error_eloga" = as.double(error_eloga),
+           "error_eloga2" = as.double(error_eloga2),
            "time" = as.numeric(Sys.time() - time_start, units = "secs")))
 }
 

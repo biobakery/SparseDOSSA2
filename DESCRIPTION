@@ -17,7 +17,8 @@ Depends:
   future.apply,
   magrittr,
   truncnorm,
-  igraph
+  igraph,
+  Rmpfr
 Suggests:
   cubature,
   testthat (>= 2.1.0)

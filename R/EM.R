@@ -16,7 +16,6 @@ EM <- function(data,
   
   # initialize EM using relative abundances
   feature_param <- fit_featureParam(data)
-  feature_param[, "mu"] <- feature_param[, "mu"] - mean(feature_param[, "mu"])
   fit_copulasso <- copulasso(
     data = data, 
     marginals = feature_param,
@@ -24,6 +23,7 @@ EM <- function(data,
     control = c(control$control_copulasso,
                 list(debug_dir = control$debug_dir))
   )
+  feature_param[, "mu"] <- feature_param[, "mu"] - mean(feature_param[, "mu"])
   params <- list(pi0 = feature_param[ ,"pi0"],
                  mu = feature_param[, "mu"],
                  sigma = feature_param[, "sigma"],

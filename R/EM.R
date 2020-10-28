@@ -67,7 +67,7 @@ EM <- function(data,
       converge_code <- 3
       break
     }
-    if(any(e_asums[, "eloga"]^2 > e_asums[, "eloga2"])) {
+    if(any(e_asums[, "eloga"]^2 >= e_asums[, "eloga2"])) {
       warning("Numeric integration in E step gave bad expectation values!")
       converge_code <- 2
       break

@@ -163,34 +163,6 @@ dloga_asum <- function(asum, x, pi0, mu, sigma, Omega, Sigma) {
                  log.p = TRUE))
 }
 
-# get_intLimits2 <- function(x, pi0, mu, sigma, Omega, Sigma,
-#                            control = list()) {
-#   control <- do.call(control_integrate, control)
-#   
-#   limits <- get_intLimits(x = x, pi0 = pi0, mu = mu, sigma = sigma,
-#                           Omega = Omega, Sigma = Sigma,
-#                           maxit = control$maxit_limits)
-#   
-#   vlim <- seq(limits[1], limits[2], length.out = control$n_vals_limits)
-#   vval <- sapply(vlim,
-#                  function(vv)
-#                    dloga(a = a(x, exp(vv)),
-#                          pi0 = pi0, mu = mu, sigma = sigma,
-#                          Omega = Omega, Sigma = Sigma))
-#   vlim <- vlim[vval > -Inf]
-#   vval <- vval[vval > -Inf]
-#   
-#   coef_quad <- lm(vval ~ vlim + I(vlim^2))$coef
-#   mu_integrand <- - coef_quad[2] / coef_quad[3] / 2
-#   sigma_integrand <- sqrt(- 1 / coef_quad[3] / 2)
-#   
-#   return(mu_integrand + 
-#            qnorm(c(control$limit_tol / 2, 
-#                    1 - control$limit_tol / 2)) * 
-#            sigma_integrand)
-#   
-# }
-
 get_offset <- function(x, 
                        pi0, mu, sigma, Omega,
                        limit_max, limit_min, step_size) {

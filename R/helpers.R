@@ -134,98 +134,12 @@ a_to_g <- function(a, pi0, mu, sigma) {
   
   return(to_return)
 }
-# 
-# a_to_u_old <- function(a, pi0, mu, sigma) {
-#   to_return <-  pi0 / 2
-#   if(any(a > 0)) ##FIXME
-#     to_return[a > 0] <- 
-#       pi0[a > 0] + 
-#       pnorm(log(a[a > 0]), 
-#             mean = mu[a > 0], 
-#             sd = sigma[a > 0]) * 
-#       (1 - pi0[a > 0])
-#   
-#   return(to_return)
-# }
 
 a <- function(x, asum) {
   a <- x * asum
-  # In case asum is Inf
-  # FIXME since this isn't supposed to happen?
   a[x == 0] <- 0  
   
   return(a)
-}
-
-# get_sigmas <- function(data, eloga, eloga2, mu) {
-#   sigmas <- 
-#     vapply(seq_len(ncol(data)),
-#            function(i_feature) {
-#              ind_samples <- data[, i_feature] > 0
-#              sqrt(mean(eloga2[ind_samples] - 
-#                          2 * eloga[ind_samples] * 
-#                          (mu[i_feature] - log(data[ind_samples, i_feature])) +
-#                          (mu[i_feature] - log(data[ind_samples, i_feature]))^2))
-#            },
-#            0.0)
-#   names(sigmas) <- colnames(data)
-#   return(sigmas)
-# }
-
-# get_intLimits <- function(f, 
-#                           center = 0, limit_max, limit_min, step_size,
-#                           lower_bound = -1000, upper_bound = 1000,
-#                           max_try = 20,
-#                           ...) {
-#   i_try <- 0
-#   while(TRUE) { ## FIXME
-#     i_try <- i_try + 1
-#     if(i_try > max_try)
-#       stop("Could not find positive values for f!")
-#     
-#     vchange <- exp(seq(from = log(limit_max),
-#                        to = log(limit_min),
-#                        by = -log(step_size)))
-#     
-#     vlim <- c(center - vchange,
-#               center,
-#               center + rev(vchange))
-#     vlim <- vlim[exp(vlim) > 0] ## FIXME??
-#     
-#     vval <- f(vlim, ...)
-#     if(any(vval < 0))
-#       stop("There are negative values of f!")
-#     vflag <- vval > 0
-#     if(sum(vflag) > 1)
-#       break
-#     
-#     step_size <- sqrt(step_size)
-#   }
-#   vindex <- which(vflag)
-#   if(vflag[1]) {
-#     warning("f is already positive at maximum lower limit!")
-#     lower <- lower_bound
-#   } else {
-#     lower <- vlim[min(vindex) - 1]
-#   }
-#   if(rev(vflag)[1]) {
-#     warning("f is already positive at maximum upper limit!")
-#     upper <- upper_bound
-#   } else {
-#     upper <- vlim[max(vindex) + 1]
-#   }
-#   
-#   return(c(lower, upper))
-# }
-
-
-det2 <- function(m) {
-  if(!isSymmetric(m))
-    stop("Matrix must be symmetric!")
-  eigens <- svd(m)$d
-  if(any(eigens <= 0))
-    stop("Negative eigen values found for the matrix!")
-  return(prod(eigens))
 }
 
 make_CVfolds <- function(n, K) {

@@ -535,31 +535,13 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
       abs(knots_diff *
             (vals_spline[-1] - vals_spline[-neval]))
     
-    # fit_lm <-
-    #   lm(vals_spline ~
-    #        splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1))
-    # coefs_spline <-
-    #   SplinesUtils::RegBsplineAsPiecePoly(
-    #     fit_lm,
-    #     "splines::bs(knots_spline, knots = knots_spline[-c(1, neval)], degree = 1)",
-    #     shift = FALSE)$PiecePoly$coef
     coefs_spline <- Rmpfr::mpfrArray(NA, precBits = control$precBits,
                                      dim = c(2, neval - 1))
-    # for some reason linear spline coefs estimated from the spline functions
-    # give negative knots function values (numerical underflow?)
-    # Which can cause mathematically invalid integrations 
-    # (integral_eloga2 * integral_dx < integral_eloga^2)
-    # Now I calculate the coefs by hand and need to test out this empirically
     coefs_spline[2, ] <- 
       (vals_spline[-1] - vals_spline[-neval]) /
       knots_diff
     coefs_spline[1, ] <- 
       vals_spline[-neval] - knots_spline[-neval] * coefs_spline[2, ]
-    # coefs_spline <-
-    #   SplinesUtils::CubicInterpSplineAsPiecePoly(
-    #     x = knots_spline,
-    #     y = vals_spline,
-    #     method = "natural")$PiecePoly$coef
     integral_dx <- sum(coefs_spline[1, ] * knots_spline[-1] +
                          coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
                          coefs_spline[1, ] * knots_spline[-neval] - 
@@ -623,119 +605,3 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
            "error_eloga2" = as.double(error_eloga2),
            "time" = as.numeric(Sys.time() - time_start, units = "secs")))
 }
-
-log_intx_dc <- function(data, zero_inflation = TRUE) {
-  lgamma_data <- lgamma(data + 1)
-  if(!zero_inflation) {
-    lgamma_sum <- lgamma(apply(data + 1, 1, sum))
-    sum(lgamma_sum) - sum(lgamma_data)
-  } else {
-    lgamma_sum <- lgamma(apply(data, 1, function(x) sum(x[x > 0] + 1)))
-    sum(lgamma_sum) - sum(lgamma_data[data > 0])
-  }
-}
-
-ddirichlet <- function (x, alpha, log.p = TRUE) 
-{
-  
-  if (!is.matrix(x)) {
-    if (is.data.frame(x)) 
-      x <- as.matrix(x)
-  }
-  
-  if (!is.matrix(alpha)) 
-    alpha <- matrix(alpha, ncol = length(alpha), nrow = nrow(x), 
-                    byrow = TRUE)
-  if (any(dim(x) != dim(alpha))) 
-    stop("Mismatch between dimensions of x and alpha in ddirichlet().\n")
-  pd <- vector(length = nrow(x))
-  for (i in 1:nrow(x)) pd[i] <- ddirichlet1(x[i, ], alpha[i, ])
-  if(!log.p) pd <- exp(pd)
-  return(pd)
-}
-
-ddirichlet1 <- function(x, alpha) {
-  logD <- sum(lgamma(alpha)) - lgamma(sum(alpha))
-  s <- sum((alpha - 1) * log(x))
-  sum(s) - logD
-}
-# integrand_num_asum <- function(log_asum, x, params) {
-#   asum <- exp(log_asum)
-#   u <- a_to_u(a(x, asum), 
-#               pi0 = params$pi0, mu = params$mu, sigma = params$sigma)
-#   g <- u_to_g(u = u, a = a(x, asum), mu = params$mu, sigma = params$sigma)
-#   logLik <- logLik_copula(g = g, asum = asum, x = x,
-#                           mu = params$mu, sigma = params$sigma, 
-#                           Omega = params$Omega)
-#   
-#   
-#   return(exp(logLik) * asum)
-# }
-# 
-# vintegrand_num_asum <- Vectorize2(integrand_num_asum,
-#                                  vectorize.args = "log_asum")
-
-# 
-# 
-# 
-# 
-# 
-# integrand_num_asum <- function(log_asum, x, params) {
-#   asum <- exp(log_asum)
-#   u <- a_to_u(a(x, asum), 
-#               pi0 = params$pi0, mu = params$mu, sigma = params$sigma)
-#   g <- u_to_g(u = u, a = a(x, asum), mu = params$mu, sigma = params$sigma)
-#   logLik <- logLik_copula(g = g, asum = asum, x = x,
-#                           mu = params$mu, sigma = params$sigma, 
-#                           Omega = params$Omega)
-#   
-#   
-#   return(exp(logLik) * asum)
-# }
-# 
-# vintegrand_num_asum <- Vectorize2(integrand_num_asum,
-#                                  vectorize.args = "log_asum")
-# 
-# 
-# pcopulasso <- function(x, 
-#                        mean, sd, pi0, sigma,
-#                        R = 100000) {
-#   samples_a <- SparseDOSSA2:::rcopulasso(n = R,
-#                                          mean = params$mu,
-#                                          sd = params$sigma,
-#                                          pi0 = params$pi0,
-#                                          sigma = solve(params$Omega))
-#   samples_asum <- vapply(seq_len(R), function(r) sum(samples_a[r, ]), 
-#                          0.0)
-#   
-#   for(i in seq_len(nrow(x))) {
-#     i_rx <- rx(c = x[i, ], C = sum(x[i, ]), R = R)
-#     samples_x <- i_rx$samples
-#     samples_xsum <- vapply(seq_len(R), function(r) sum(samples_a[r, ]), 
-#                            0.0)
-#   }
-#   l_rx <- lapply(seq_len(nrow(x)), 
-#                  function(i) {
-#                    rx(c = x[i, ], C = sum(x[i, ]), R = R)
-#                  })
-#   
-#   sum(log(vapply(seq_len(nrow(x)), 
-#                  function(i)
-#                    mean(vapply(seq_along(R), function(r) {
-#                      dmultinom(x = x[i, ], prob = samples_X[r, ])
-#                    }, 0.0)),
-#                  0.0)))
-# }
-# 
-# rx <- function(c, C, R) {
-#   x <- (c + 0.5) / (C + 0.5)
-#   mu <- log(x)
-#   sigma <- sqrt((1 - x) / (c + 0.5))
-#   
-#   samples <- exp(rnorm(n = R * length(c), mean = mu, sd = sigma)) * 
-#     rbinom(n = R * length(c), size = 1, prob = 0.5)
-#   samples <- t(matrix(samples, nrow = length(c)))
-#   params <- list(mu = mu, sigma = sigma)
-#   
-#   return(list(samples = samples, params = params))
-# }

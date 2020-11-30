@@ -5,5 +5,5 @@
 .RData
 .Ruserdata
 .DS_Store
-*.html
 *.sbatch
+*.html

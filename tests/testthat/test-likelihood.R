@@ -162,15 +162,14 @@ test_that("dloga works", {
 
 test_that("dloga_old works", {
   expect_lt(abs(
-    mvtnorm::dmvnorm(x = c(0, 0),
-                     mean = c(0, 0),
-                     sigma = diag(c(1, 1)),
-                     log = TRUE) -
-      dloga_old(a = c(1, 1),
-                pi0 = c(0, 0),
-                mu = c(0, 0),
-                sigma = c(1, 1),
-                Omega = diag(c(1, 1)))  
+    # FIXME
+    0.5 * 0.5 * dnorm(0) -
+      dloga(a = c(1, 0),
+            pi0 = c(0.5, 0.5),
+            mu = c(0, 0),
+            sigma = c(1, 1),
+            Omega = diag(c(1, 1)),
+            Sigma = diag(c(1, 1)), log.p = FALSE)  
   ),
   1e-15)
   expect_lt(abs(

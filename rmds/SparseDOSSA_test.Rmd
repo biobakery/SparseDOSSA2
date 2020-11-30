@@ -12,14 +12,14 @@ library(ggplot2)
 
 ```{r setup2, include=FALSE}
 # Registry
-# batchtools::makeRegistry(file.dir = "r_batchtools_reg/Stool_vaginal/", 
+# batchtools::makeRegistry(file.dir = "r_batchtools_reg/simu_test/",
 #                          package = "magrittr")
 batchtools::loadRegistry(file.dir = "r_batchtools_reg/Stool_vaginal", 
                          writeable = TRUE)
 batchtools::clearRegistry()
 
 # Grid parameters
-ncpus <- 46
+ncpus <- 20
 partition <- "janson_cascade"
 walltime <- 48 * 3600
 
@@ -29,17 +29,48 @@ dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 smar::sourceDir("SparseDOSSA2/R/")
 ```
 
-```{r setup simulation params}
-tb_job <- rbind(
-  tidyr::expand_grid(
-    lambdas = 10^seq(from = 0, to = -3, length.out = 7)
-  )
-) %>% 
-  tidyr::expand_grid(dataset = c("vaginal", "stool")) %>% 
-  dplyr::mutate(i_job = seq_len(dplyr::n()))
-save(tb_job, file = paste0(dir_output, "tb_job.RData"))
+```{r params}
+set.seed(1)
+
+p <- c(50)
+n <- c(50, 100)
+perc_cor <- c(0.05, 0.5)
+one_cor <- 0.2
+one_pi0 <- 0.5
+
+tb_param <- 
+  tidyr::expand_grid(p, n, perc_cor, one_cor, one_pi0) %>% 
+  dplyr::group_by(p, perc_cor, one_cor) %>% 
+  dplyr::mutate(params = list(
+    pi0 = rep(one_pi0, p[1]),
+    mu = rep(0, p[1]),
+    sigma = rep(1, p[1]),
+    Sigma = {
+      Sigma <- diag(1, p[1])
+      ind_nonzero <- sample.int(n = p[1] * (p[1] - 1) / 2,
+                                size = p[1] * (p[1] - 1) / 2 * perc_cor[1])
+      Sigma[lower.tri(Sigma)][ind_nonzero] <- one_cor[1]
+      Sigma[upper.tri(Sigma)] <- t(Sigma)[upper.tri(Sigma)]
+      Sigma
+    }) %>% list(),
+    params = 
+      c(params[[1]],
+        list(Omega = solve(params[[1]]$Sigma))) %>% 
+      list()
+  ) %>% 
+  dplyr::mutate(i_param = dplyr::group_indices()) %>% 
+  dplyr::ungroup() %>%
+  dplyr::mutate(i_sim = seq(1, dplyr::n()))
 ```
 
+```{r simulate data}
+R <- 5
+tb_param <- tb_param %>% 
+  tidyr::expand_grid(R = seq(1, R)) %>% 
+  dplyr::group_by(seq(1, dplyr::n())) %>% 
+  dplyr::mutate(a_samples = 
+                  )
+```
 ```{r load datasets}
 load("data/physeqs/HMP1II_vaginal.RData")
 load("data/physeqs/HMP1II_stool.RData")
@@ -47,15 +78,22 @@ load("data/physeqs/HMP1II_stool.RData")
 x_samples_vaginal <- physeq_vaginal %>% 
   smar::otu_table2() %>% 
   t()
-# subset to top 200 samples and 250 features
+# first subset to top 100 samples with deepest sequencing depth
 x_samples_vaginal <- 
-  x_samples_vaginal[order(-apply(x_samples_vaginal, 1, sum))[seq(1, 200)], ]
+  x_samples_vaginal[x_samples_vaginal %>% 
+                      apply(1, sum) %>% 
+                      {order(-.)[1:100]}, ]
+# remove features with at most one non-zero values
 x_samples_vaginal <- 
-  x_samples_vaginal[, apply(x_samples_vaginal > 0, 2, sum) >= 2]
+  x_samples_vaginal[, (x_samples_vaginal > 0) %>% 
+                      apply(2, sum) %>% 
+                      {. >= 2}]
+# finally subset to top 200 features with largest average relative abundance
 x_samples_vaginal <- 
-  x_samples_vaginal[, apply(x_samples_vaginal, 1, TSS) %>% 
+  x_samples_vaginal[, x_samples_vaginal %>% 
+                      apply(1, TSS) %>% 
                       apply(1, mean) %>% 
-                      {order(-.)[1:250]}]
+                      {order(-.)[1:200]}]
 # set to relative abundance
 x_samples_vaginal <- 
   x_samples_vaginal %>% 
@@ -65,15 +103,22 @@ x_samples_vaginal <-
 x_samples_stool <- physeq_stool %>% 
   smar::otu_table2() %>% 
   t()
-# subset to top 200 samples and 250 features
+# first subset to top 100 samples with deepest sequencing depth
 x_samples_stool <- 
-  x_samples_stool[order(-apply(x_samples_stool, 1, sum))[seq(1, 200)], ]
+  x_samples_stool[x_samples_stool %>% 
+                      apply(1, sum) %>% 
+                      {order(-.)[1:100]}, ]
+# remove features with at most one non-zero values
 x_samples_stool <- 
-  x_samples_stool[, apply(x_samples_stool > 0, 2, sum) >= 2]
+  x_samples_stool[, (x_samples_stool > 0) %>% 
+                      apply(2, sum) %>% 
+                      {. >= 2}]
+# finally subset to top 200 features with largest average relative abundance
 x_samples_stool <- 
-  x_samples_stool[, apply(x_samples_stool, 1, TSS) %>% 
+  x_samples_stool[, x_samples_stool %>% 
+                      apply(1, TSS) %>% 
                       apply(1, mean) %>% 
-                      {order(-.)[1:250]}]
+                      {order(-.)[1:200]}]
 # set to relative abundance
 x_samples_stool <- 
   x_samples_stool %>% 
@@ -91,26 +136,25 @@ one_job <- function(i_job) {
     x_samples <- x_samples_stool
 
   # fit SparseDOSSA
-  fit_EM <- EM_CV(
+  fit_EM <- EM_diagnose_CV(
     data = x_samples,
     lambdas = i_tb_job$lambdas,
-    K = 10,
-    control = list(abs_tol = 1e-2,
-                   rel_tol = 1e-2,
-                   maxit = 50,
+    K = 5,
+    control = list(abs_tol = 1e-3,
+                   rel_tol = 1,
+                   maxit = 100,
                    verbose = TRUE,
                    debug_dir = paste0(dir_output, i_job, "/")))
   save(fit_EM, file = paste0(dir_output, "fit_", i_job, ".RData"))
 }
-```
+````
 
 ```{r submit jobs}
 time_start <- Sys.time()
 tb_ids <- batchtools::batchMap(one_job, 
-                               i_job = tb_job$i_job)
+                               i_job = tb_job$i_job[1:2])
 batchtools::batchExport(mget(ls()))
-batchtools::submitJobs(ids = 1:8,
-                       resources =  list(ncpus = ncpus, 
+batchtools::submitJobs(resources =  list(ncpus = ncpus, 
                                          partition = partition, 
                                          walltime = walltime))
 print(Sys.time() - time_start)

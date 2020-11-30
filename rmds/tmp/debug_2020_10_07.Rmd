@@ -1,0 +1,7 @@
+
+library(magrittr)
+library(ggplot2)
+
+load("../../")
+x_samples <- get(paste0("physeq_", i_tb_job$dataset, "_bl")) %>% 
+    smar::otu_table2()

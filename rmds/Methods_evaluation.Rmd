@@ -1,0 +1,198 @@
+---
+title: "Methods evaluation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/n/janson_lab/lab/sma/sparsedossa_update/")
+knitr::opts_chunk$set(echo=FALSE)
+library(magrittr)
+library(ggplot2)
+```
+
+```{r setup2, include=FALSE}
+# Registry
+# batchtools::makeRegistry(file.dir = "r_batchtools_reg/Methods_evaluation",
+#                          package = "magrittr")
+batchtools::loadRegistry(file.dir = "r_batchtools_reg/Methods_evaluation", 
+                         writeable = TRUE)
+batchtools::clearRegistry()
+
+# Grid parameters
+ncpus <- 45
+partition <- "janson_cascade"
+walltime <- 48 * 3600
+
+# Output dir
+dir_output <- "/n/janson_lab/lab/sma/sparsedossa_update/results/Methods_evaluation/"
+dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
+smar::sourceDir("SparseDOSSA2/R/")
+```
+
+```{r load datasets}
+load("data/physeqs/HMP1II_vaginal.RData")
+load("data/physeqs/HMP1II_stool.RData")
+
+x_samples_vaginal <- physeq_vaginal %>% 
+  smar::otu_table2() %>% 
+  t()
+# first subset to top 100 samples with deepest sequencing depth
+x_samples_vaginal <- 
+  x_samples_vaginal[x_samples_vaginal %>% 
+                      apply(1, sum) %>% 
+                      {order(-.)[1:200]}, ]
+# remove features with at most one non-zero values
+x_samples_vaginal <- 
+  x_samples_vaginal[, (x_samples_vaginal > 0) %>% 
+                      apply(2, sum) %>% 
+                      {. >= 2}]
+# finally subset to top 200 features with largest average relative abundance
+x_samples_vaginal <- 
+  x_samples_vaginal[, x_samples_vaginal %>% 
+                      apply(1, TSS) %>% 
+                      apply(1, mean) %>% 
+                      {order(-.)[1:200]}]
+# count
+x_samples_vaginal_count <- x_samples_vaginal
+# set to relative abundance
+x_samples_vaginal <- 
+  x_samples_vaginal %>% 
+  apply(1, TSS) %>% 
+  t()
+
+x_samples_stool <- physeq_stool %>% 
+  smar::otu_table2() %>% 
+  t()
+# first subset to top 100 samples with deepest sequencing depth
+x_samples_stool <- 
+  x_samples_stool[x_samples_stool %>% 
+                      apply(1, sum) %>% 
+                      {order(-.)[1:200]}, ]
+# remove features with at most one non-zero values
+x_samples_stool <- 
+  x_samples_stool[, (x_samples_stool > 0) %>% 
+                      apply(2, sum) %>% 
+                      {. >= 2}]
+# finally subset to top 200 features with largest average relative abundance
+x_samples_stool <- 
+  x_samples_stool[, x_samples_stool %>% 
+                      apply(1, TSS) %>% 
+                      apply(1, mean) %>% 
+                      {order(-.)[1:200]}]
+# count
+x_samples_stool_count <- x_samples_stool
+# set to relative abundance
+x_samples_stool <- 
+  x_samples_stool %>% 
+  apply(1, TSS) %>% 
+  t()
+```
+
+
+```{r training data grid}
+set.seed(1)
+tb_training <- 
+  tibble::tibble(
+    i_training = seq(1, 5)
+  ) %>% 
+  dplyr::group_by(i_training) %>% 
+  dplyr::mutate(
+    ind_training = 
+      sample.int(n = 200, size = 100) %>% 
+      list(),
+    ind_vali = seq(1, 200) %>% 
+      setdiff(ind_training[[1]]) %>% 
+      list()
+  ) %>% 
+  dplyr::ungroup() %>% 
+  tidyr::expand_grid(dataset = c("vaginal", "stool"))
+```
+
+```{r method grid}
+tb_sparsedossa <- 
+  tidyr::expand_grid(
+    lambda = 10^seq(-3, 0, by = 0.5),
+    maxit = c(3, 10, 30)
+  ) %>% 
+  dplyr::mutate(i_param = seq(1, dplyr::n())) %>% 
+  dplyr::group_by(i_param) %>% 
+  dplyr::mutate(l_param = 
+                  list(lambda = lambda,
+                       maxit = maxit) %>% 
+                  list()) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(l_param) %>% 
+  dplyr::mutate(method = "sparsedossa")
+
+tb_mvn <- 
+  tidyr::expand_grid(
+    lambda = 10^seq(-3, 0, by = 0.5)
+  ) %>% 
+  dplyr::mutate(i_param = seq(1, dplyr::n())) %>% 
+  dplyr::group_by(i_param) %>% 
+  dplyr::mutate(l_param = 
+                  list(lambda = lambda) %>% 
+                  list()) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(l_param) %>% 
+  dplyr::mutate(method = "mvn")
+
+tb_dmm <- 
+  tidyr::expand_grid(
+    k = seq(3, 8)
+  ) %>% 
+  dplyr::mutate(i_param = seq(1, dplyr::n())) %>% 
+  dplyr::group_by(i_param) %>% 
+  dplyr::mutate(l_param = 
+                  list(k = k) %>% 
+                  list()) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(l_param) %>% 
+  dplyr::mutate(method = "dmm")
+```
+
+```{r simulation task}
+one_job <- function(i_job) {
+  future::plan(list(future::sequential, future::sequential, future::multicore))
+  i_tb_job <- tb_job[i_job, ]
+  if(i_tb_job$dataset == "vaginal")
+    x_samples <- x_samples_vaginal
+  if(i_tb_job$dataset == "stool")
+    x_samples <- x_samples_stool
+
+  # fit SparseDOSSA
+  fit_EM <- EM_diagnose_CV(
+    data = x_samples,
+    lambdas = i_tb_job$lambdas,
+    K = 5,
+    control = list(abs_tol = 1e-3,
+                   rel_tol = 1,
+                   maxit = 100,
+                   verbose = TRUE,
+                   debug_dir = paste0(dir_output, i_job, "/")))
+  
+  fit_EM <- EM_diagnose(
+    data = x_samples,
+    lambdas = i_tb_job$lambdas,
+    control = list(abs_tol = 1e-3,
+                   rel_tol = 1,
+                   maxit = 100,
+                   verbose = TRUE,
+                   debug_dir = paste0(dir_output, i_job, "/"),
+                   control_numint = list(rel_tol = 1e-3,
+                                         abs_tol = 0,
+                                         max_eval = 50)))
+  save(fit_EM, file = paste0(dir_output, "fit_", i_job, ".RData"))
+}
+```
+
+```{r submit jobs}
+time_start <- Sys.time()
+tb_ids <- batchtools::batchMap(one_job, 
+                               i_job = tb_job$i_job[1:2])
+batchtools::batchExport(mget(ls()))
+batchtools::submitJobs(resources =  list(ncpus = ncpus, 
+                                         partition = partition, 
+                                         walltime = walltime))
+print(Sys.time() - time_start)
+```

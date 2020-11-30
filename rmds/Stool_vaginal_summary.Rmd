@@ -14,21 +14,17 @@ dir.create(dir_output, recursive = TRUE, showWarnings = FALSE)
 ```
 
 ```{r load results, include=FALSE}
-batchtools::loadRegistry(file.dir = "r_batchtools_reg/Stool_vaginal", writeable = FALSE)
+batchtools::loadRegistry(file.dir = "r_batchtools_reg/Stool_vaginal", 
+                         writeable = FALSE)
 tb_result <- tb_job %>% 
+  dplyr::filter(i_job %in% batchtools::findDone()$job.id) %>% 
   dplyr::group_by(i_job) %>% 
   dplyr::mutate(fit_EM = 
   {
-    if(paste0("fit_", i_job, ".RData") %in% list.files(dir_output)) {
-      load(paste0(dir_output, "fit_", i_job, ".RData"))
-      list(fit_EM)
-    } else {
-      list(NULL)
-    }
+    load(paste0(dir_output, "fit_", i_job, ".RData"))
+    list(fit_EM)
   }) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::filter(fit_EM %>% 
-                  purrr::map_lgl(~ !is.null(.x)))
+  dplyr::ungroup()
 ```
 
 Two datasets were fitted, from stool (more continuous) and vaginal (discretized by the dominant species) samples. For stool, $n=$ `r nrow(x_samples_stool)` and $p=$ `r ncol(x_samples_stool)`. For vaginal, $n=$ `r nrow(x_samples_vaginal)` and $p=$ `r ncol(x_samples_vaginal)`.
@@ -40,15 +36,38 @@ tb_result <- tb_result %>%
                   format(digits = 2) %>% 
                   forcats::as_factor()) %>% 
   dplyr::group_by(i_job) %>% 
-  dplyr::mutate(sparsity_Omega = fit_EM[[1]]$l_fits_full[[1]]$fit$Omega %>% 
+  dplyr::mutate(sparsity_Omega = fit_EM[[1]]$fit$Omega %>% 
                   SparseDOSSA2:::lower_tri() %>% {mean(. == 0)},
-                sparsity_Sigma = fit_EM[[1]]$l_fits_full[[1]]$fit$Sigma %>% 
+                sparsity_Sigma = fit_EM[[1]]$fit$Sigma %>% 
                   SparseDOSSA2:::lower_tri() %>% {mean(. == 0)},
-                logLik_CV = mean(setdiff(fit_EM[[1]]$logLik_CV, -Inf)),
-                logLik_CV_sd = sd(setdiff(fit_EM[[1]]$logLik_CV, -Inf)),
-                logLik = fit_EM[[1]]$l_fits_full[[1]]$fit$logLik) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::filter(!is.na(logLik))
+                logLik_CV = mean(setdiff(
+                  fit_EM[[1]]$logLik_CV[, 1] + {
+                  if(dataset == "vaginal") {
+                    apply(x_samples_vaginal, 
+                          1, 
+                          function(x) 
+                            - sum(log(x[x > 0])))
+                  } else {
+                    apply(x_samples_stool, 
+                          1, 
+                          function(x) 
+                            - sum(log(x[x > 0])))
+                  }}, -Inf)),
+                logLik_CV_sd = sd(setdiff(
+                  fit_EM[[1]]$logLik_CV[, 1] + {
+                  if(dataset == "vaginal") {
+                    apply(x_samples_vaginal, 
+                          1, 
+                          function(x) 
+                            - sum(log(x[x > 0])))
+                  } else {
+                    apply(x_samples_stool, 
+                          1, 
+                          function(x) 
+                            - sum(log(x[x > 0])))
+                  }}, -Inf)) / sqrt(10),
+                logLik = fit_EM[[1]]$fit$logLik) %>% 
+  dplyr::ungroup()
 ```
 Main conclusion: graphical lasso and ridge estimators land at very similar "best" solution by cross validation likelihood.
 
@@ -72,7 +91,7 @@ tb_result %>%
   geom_errorbar(aes(alpha = Class, ymin = logLik - sd, ymax = logLik + sd),
                 width = 0.02) +
   scale_alpha_manual(values = c("logLik_CV" = 1, "logLik" = 0), guide = FALSE) +
-  facet_grid(dataset ~ penalize_method, scales = "free_y")
+  facet_grid(dataset ~ ., scales = "free_y")
 
 # tb_result %>%
 #   ggplot(aes(x = log10(lambda), y = sparsity_Omega)) +
@@ -89,60 +108,60 @@ tb_result %>%
 
 # Do these results give similar parameter estimations?
 ```{r compare fit, echo=FALSE}
-tb_result_compare <- tb_result %>%
-  dplyr::group_by(penalize_method, dataset) %>% 
-  dplyr::arrange(-logLik_CV) %>% 
-  dplyr::slice(1) %>% 
-  dplyr::ungroup()
-
-tb_result_compare <- c("sigma", "Omega", "Sigma") %>% 
-  purrr::map_dfr(
-    function(i_param) 
-      tb_result_compare$fit_EM %>% 
-      purrr::map2_dfr(
-        tb_result_compare$i_job,
-        function(i_fit, i_job)
-          tibble::tibble(
-            param = i_param,
-            i_job = i_job,
-            values = {if(!(i_param %in% c("Omega", "Sigma")))
-                i_fit$l_fits_full[[1]]$fit[[i_param]]
-              else
-                i_fit$l_fits_full[[1]]$fit[[i_param]] %>% 
-                lower_tri()},
-            i_feature = seq_along(values))
-      )
-  ) %>% 
-  dplyr::left_join(tb_result_compare, by = "i_job")
-
-tb_result_compare <- tb_result_compare %>% 
-  tidyr::pivot_wider(id_cols = c(dataset, param, i_feature),
-                     names_from = penalize_method,
-                     values_from = values)
-
-for(i_param in c("sigma", "Omega", "Sigma")) {
-  p <- tb_result_compare %>% 
-    dplyr::filter(param == i_param) %>% 
-    ggplot(aes(x = huge, y = ridge1)) +
-    geom_point() +
-    geom_abline(intercept = 0, slope = 1) +
-    ggpubr::stat_cor() +
-    facet_wrap(.~dataset) +
-    ggtitle(i_param) +
-    coord_fixed()
-  print(p)
-}
-
-for(i_param in c("sigma", "Omega", "Sigma")) {
-  p <- tb_result_compare %>% 
-    dplyr::filter(param == i_param) %>% 
-    ggplot(aes(x = huge, y = ridge2)) +
-    geom_point() +
-    geom_abline(intercept = 0, slope = 1) +
-    ggpubr::stat_cor() +
-    facet_wrap(.~dataset) +
-    ggtitle(i_param) +
-    coord_fixed()
-  print(p)
-}
+# tb_result_compare <- tb_result %>%
+#   dplyr::group_by(penalize_method, dataset) %>% 
+#   dplyr::arrange(-logLik_CV) %>% 
+#   dplyr::slice(1) %>% 
+#   dplyr::ungroup()
+# 
+# tb_result_compare <- c("sigma", "Omega", "Sigma") %>% 
+#   purrr::map_dfr(
+#     function(i_param) 
+#       tb_result_compare$fit_EM %>% 
+#       purrr::map2_dfr(
+#         tb_result_compare$i_job,
+#         function(i_fit, i_job)
+#           tibble::tibble(
+#             param = i_param,
+#             i_job = i_job,
+#             values = {if(!(i_param %in% c("Omega", "Sigma")))
+#                 i_fit$l_fits_full[[1]]$fit[[i_param]]
+#               else
+#                 i_fit$l_fits_full[[1]]$fit[[i_param]] %>% 
+#                 lower_tri()},
+#             i_feature = seq_along(values))
+#       )
+#   ) %>% 
+#   dplyr::left_join(tb_result_compare, by = "i_job")
+# 
+# tb_result_compare <- tb_result_compare %>% 
+#   tidyr::pivot_wider(id_cols = c(dataset, param, i_feature),
+#                      names_from = penalize_method,
+#                      values_from = values)
+# 
+# for(i_param in c("sigma", "Omega", "Sigma")) {
+#   p <- tb_result_compare %>% 
+#     dplyr::filter(param == i_param) %>% 
+#     ggplot(aes(x = huge, y = ridge1)) +
+#     geom_point() +
+#     geom_abline(intercept = 0, slope = 1) +
+#     ggpubr::stat_cor() +
+#     facet_wrap(.~dataset) +
+#     ggtitle(i_param) +
+#     coord_fixed()
+#   print(p)
+# }
+# 
+# for(i_param in c("sigma", "Omega", "Sigma")) {
+#   p <- tb_result_compare %>% 
+#     dplyr::filter(param == i_param) %>% 
+#     ggplot(aes(x = huge, y = ridge2)) +
+#     geom_point() +
+#     geom_abline(intercept = 0, slope = 1) +
+#     ggpubr::stat_cor() +
+#     facet_wrap(.~dataset) +
+#     ggtitle(i_param) +
+#     coord_fixed()
+#   print(p)
+# }
 ```

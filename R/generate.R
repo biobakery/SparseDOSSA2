@@ -64,8 +64,8 @@ rcopulasso <- function(n, pi0, mu, sigma, Omega) {
 }
 
 rZILogN_one <- function(n, pi0, mu, sigma) {
-  return(exp(rnorm(n = n, mean = mu, sd = sigma)) *
-           rbinom(n = n, size = 1, prob = 1 - pi0))
+    return(exp(rnorm(n = n, mean = mu, sd = sigma)) *
+             rbinom(n = n, size = 1, prob = 1 - pi0))
 }
 
 generate_featureParam <- function(F_fit, param_original, n_feature) {

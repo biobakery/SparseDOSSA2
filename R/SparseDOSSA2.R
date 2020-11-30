@@ -145,16 +145,20 @@ SparseDOSSA2 <- function(template,
   }
   
   mat_rel <- apply(mat_spiked_metadata, 2, TSS)
-  if(control$verbose) 
-    message("Generating count matrix...")
-  # generate read depth
-  depth_new <- generate_depth(mu_depth = template$depth_fit["mu_depth"],
-                              sigma_depth = template$depth_fit["sigma_depth"],
-                              n = n_sample,
-                              median_depth = median_read_depth)
-  # generate read counts
-  mat_count <- generate_count(rel = mat_rel,
-                              depth = depth_new)
+  if(any(is.na(template$depth_fit))) {
+    mat_count <- mat_rel
+  } else {
+    if(control$verbose) 
+      message("Generating count matrix...")
+    # generate read depth
+    depth_new <- generate_depth(mu_depth = template$depth_fit["mu_depth"],
+                                sigma_depth = template$depth_fit["sigma_depth"],
+                                n = n_sample,
+                                median_depth = median_read_depth)
+    # generate read counts
+    mat_count <- generate_count(rel = mat_rel,
+                                depth = depth_new)
+  }
   
   return(list(simulated_data = mat_count,
               simulated_matrices = list(rel = mat_rel,

@@ -177,8 +177,8 @@ EM_CV <- function(data,
     if(control$verbose) 
       message("Performing CV k=", k)
     ll_results_CV[[k]] <- future::future({
-      data_training <- data[CV_folds != k, ]
-      data_testing <- data[CV_folds == k, ]
+      data_training <- data[CV_folds != k, , drop = FALSE]
+      data_testing <- data[CV_folds == k, , drop = FALSE]
       
       l_fits_k <- 
         future.apply::future_lapply(

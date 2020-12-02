@@ -5,10 +5,10 @@
 \title{Simulate synthetic microbial abundance observations with SparseDOSSA2}
 \usage{
 SparseDOSSA2(
-  template,
-  n_sample,
+  template = "Stool",
+  n_sample = 100,
   new_features = TRUE,
-  n_feature,
+  n_feature = 100,
   spike_metadata = c("none", "both", "abundance", "prevalence"),
   metadata_effect_size = 1,
   perc_feature_spiked_metadata = 0.05,
@@ -97,7 +97,7 @@ and metadata variables.
 sim <- SparseDOSSA2(template = "stool", n_sample = 200, new_features = FALSE)
 ## Using user-provided trained SparseDOSSA2 model:
 data("Stool_subset")
-fitted <- fit_SparseDOSSA(data = stool_subset)
+fitted <- fit_SparseDOSSA(data = Stool_subset)
 sim <- SparseDOSSA2(template = fitted, n_sample = 200, new_features = FALSE)
 }
 \author{

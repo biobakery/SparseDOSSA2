@@ -20,8 +20,7 @@ EM <- function(data,
     data = data, 
     marginals = feature_param,
     lambda = lambda,
-    control = c(control$control_copulasso,
-                list(debug_dir = control$debug_dir))
+    control = list(debug_dir = control$debug_dir)
   )
   feature_param[, "mu"] <- feature_param[, "mu"] - mean(feature_param[, "mu"])
   params <- list(pi0 = feature_param[ ,"pi0"],
@@ -77,8 +76,7 @@ EM <- function(data,
     ## M step
     fit_copulasso <- copulasso(data = data * exp(e_asums[, "eloga"]), 
                                marginals = feature_param,
-                               lambda = lambda,
-                               control = control$control_copulasso)
+                               lambda = lambda)
     if(fit_copulasso$copulasso_code != 0) {
       warning("Missing values in Omega estimation! (lambda to small?)")
       converge_code <- 4
@@ -141,10 +139,10 @@ EM_CV <- function(data,
   control <- do.call(control_fit, control)
   l_filtering <- filter_data(data)
   data <- data[l_filtering$ind_sample, l_filtering$ind_feature, drop = FALSE]
-  if(!is.null(lambdas) & any(lambdas <= 0))
-    stop("lambdas must be positive values!")
   if(is.null(lambdas))
     lambdas <- 10^seq(-2, 0, length.out = 5)
+  if(any(lambdas <= 0))
+    stop("lambdas must be positive values!")
   if(!is.null(control$debug_dir)) {
     dir.create(control$debug_dir, recursive = TRUE)
     control$debug_dir <- normalizePath(control$debug_dir)

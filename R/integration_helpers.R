@@ -3,7 +3,6 @@ integrate2 <- function(f,
                        rel_tol, abs_tol, max_eval, 
                        precBits,
                        method, 
-                       offset = FALSE, 
                        ...) {
   if(lower == 0 & upper == 0)
     return(list(integral = 0,
@@ -11,77 +10,61 @@ integrate2 <- function(f,
                 neval = 0,
                 returnCode = 1))
   
-  if(offset)
-    val_offset <- f((lower + upper) / 2, ...)
-  else
-    val_offset <- 1
+  ff <- function(x) f(x, ...)
   
-  ff <- function(x) f(x, ...) / val_offset 
+  neval <- 2
+  knots_spline <- Rmpfr::mpfr(c(lower, upper),
+                              precBits = precBits)
+  vals_spline <- 
+    Rmpfr::mpfr(
+      ff(as.double(knots_spline)), 
+      precBits = precBits)
+  errors_spline <- Inf
   
-  if (method %in% c("hcubature", "pcubature")) {
-    fit_integrate <- cubature::cubintegrate(ff,
-                                            lower = lower, upper = upper,
-                                            relTol = rel_tol, absTol = abs_tol,
-                                            method = method, maxEval = max_eval)
-    fit_integrate$integral <- fit_integrate$integral * val_offset
-    fit_integrate$error <- fit_integrate$error * val_offset
-    return(fit_integrate)
-  } else if (method == "spline") {
+  while(TRUE) {
+    i_max_error <- which(errors_spline == max(errors_spline))[1]
+    knots_spline <- c(knots_spline[seq(1, i_max_error)],
+                      Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
+                      knots_spline[seq(i_max_error + 1, neval)])
+    vals_spline <- c(vals_spline[seq(1, i_max_error)],
+                     Rmpfr::mpfr(ff(as.double(knots_spline[i_max_error + 1])),
+                                 precBits = precBits),
+                     vals_spline[seq(i_max_error + 1, neval)])
     
-    neval <- 2
-    knots_spline <- Rmpfr::mpfr(c(lower, upper),
-                                precBits = precBits)
-    vals_spline <- 
-      Rmpfr::mpfr(
-        ff(as.double(knots_spline)), 
-        precBits = precBits)
-    errors_spline <- Inf
+    neval <- neval + 1
+    knots_diff <-  knots_spline[-1] - knots_spline[-neval]
+    errors_spline <- 
+      abs(knots_diff *
+            (vals_spline[-1] - vals_spline[-neval]))
     
-    while(TRUE) {
-      i_max_error <- which(errors_spline == max(errors_spline))[1]
-      knots_spline <- c(knots_spline[seq(1, i_max_error)],
-                        Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
-                        knots_spline[seq(i_max_error + 1, neval)])
-      vals_spline <- c(vals_spline[seq(1, i_max_error)],
-                       Rmpfr::mpfr(ff(as.double(knots_spline[i_max_error + 1])),
-                                   precBits = precBits),
-                       vals_spline[seq(i_max_error + 1, neval)])
-      
-      neval <- neval + 1
-      knots_diff <-  knots_spline[-1] - knots_spline[-neval]
-      errors_spline <- 
-        abs(knots_diff *
-              (vals_spline[-1] - vals_spline[-neval]))
-      
-      coefs_spline <- Rmpfr::mpfrArray(NA, precBits = precBits,
-                                       dim = c(2, neval - 1))
-      coefs_spline[2, ] <- 
-        (vals_spline[-1] - vals_spline[-neval]) /
-        knots_diff
-      coefs_spline[1, ] <- 
-        vals_spline[-neval] - knots_spline[-neval] * coefs_spline[2, ]
-      
-      integral <- sum(coefs_spline[1, ] * knots_spline[-1] +
-                           coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
-                           coefs_spline[1, ] * knots_spline[-neval] - 
-                           coefs_spline[2, ] / 2 * knots_spline[-neval]^2)
-      
-      error <- sum(errors_spline)
-      
-      if(neval >= max_eval)
+    coefs_spline <- Rmpfr::mpfrArray(NA, precBits = precBits,
+                                     dim = c(2, neval - 1))
+    coefs_spline[2, ] <- 
+      (vals_spline[-1] - vals_spline[-neval]) /
+      knots_diff
+    coefs_spline[1, ] <- 
+      vals_spline[-neval] - knots_spline[-neval] * coefs_spline[2, ]
+    
+    integral <- sum(coefs_spline[1, ] * knots_spline[-1] +
+                      coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
+                      coefs_spline[1, ] * knots_spline[-neval] - 
+                      coefs_spline[2, ] / 2 * knots_spline[-neval]^2)
+    
+    error <- sum(errors_spline)
+    
+    if(neval >= max_eval)
+      break
+    if(integral < 0)
+      stop("Negative integration values; something went wrong!")
+    if(integral > 0)
+      if(error / abs(integral) < rel_tol |
+         error < abs_tol)
         break
-      if(integral < 0)
-        stop("Negative integration values; something went wrong!")
-      if(integral > 0)
-        if(error / abs(integral) < rel_tol |
-           error < abs_tol)
-          break
-    }
-    return(list(integral = integral * val_offset,
-                error = error * val_offset,
-                neval = neval,
-                returnCode = 0))
   }
+  return(list(integral = integral,
+              error = error,
+              neval = neval,
+              returnCode = 0))
 }
 
 
@@ -161,54 +144,6 @@ dloga_asum <- function(asum, x, pi0, mu, sigma, Omega, Sigma) {
     return(dloga(a(x, asum), pi0 = pi0, mu = mu, sigma = sigma, 
                  Omega = Omega, Sigma = Sigma,
                  log.p = TRUE))
-}
-
-get_offset <- function(x, 
-                       pi0, mu, sigma, Omega,
-                       limit_max, limit_min, step_size) {
-  
-  vchange <- exp(seq(from = log(limit_max),
-                     to = log(limit_min),
-                     by = -log(step_size)))
-  vlim <- c(-vchange, vchange)
-  vlim <- vlim[exp(vlim) > 0] ## FIXME??
-  
-  vval <- vapply(vlim, 
-                 function(i_loga) {
-                   dloga(a = a(x, exp(i_loga)),
-                         pi0 = pi0, mu = mu, sigma = sigma, Omega = Omega)
-                 },
-                 0.0)
-  if(any(vval_lower < 0))
-    stop("There are negative values of f!")
-  vflag_lower <- vval_lower > 0
-  if(any(vflag_lower)) {
-    if(vflag_lower[1]) {
-      warning("f is already positive at maximum lower limit!")
-      lower <- lower_bound
-    }
-    lower <- vlim_lower[c(vflag_lower[-1], TRUE)][1]
-  } else {
-    warning("No positive f value for lower limits!")
-    lower <- vlim_lower[length(vlim_lower)]
-  }
-  
-  vval_upper <- f(vlim_upper, ...)
-  if(any(vval_upper < 0))
-    stop("There are negative values of f!")
-  vflag_upper <- vval_upper > 0
-  if(any(vflag_upper)) {
-    if(vflag_upper[1]) {
-      warning("f is already positive at maximum upper limit!")
-      upper <- upper_bound
-    }
-    upper <- vlim_upper[c(vflag_upper[-1], TRUE)][1]
-  } else {
-    warning("No positive f value for upper limits!")
-    upper <- vlim_upper[length(vlim_upper)]
-  }
-  
-  return(c(lower, upper))
 }
 
 get_diff <- function(x, x_old, 

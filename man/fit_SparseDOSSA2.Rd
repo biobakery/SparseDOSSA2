@@ -2,20 +2,50 @@
 % Please edit documentation in R/SparseDOSSA2_fit.R
 \name{fit_SparseDOSSA2}
 \alias{fit_SparseDOSSA2}
-\title{Title}
+\title{Fit SparseDOSSA 2 model to a microbiome abundance dataset}
 \usage{
-fit_SparseDOSSA2(data, lambda = NULL, control = list())
+fit_SparseDOSSA2(data, lambda = 1, control = list())
 }
 \arguments{
-\item{data}{}
+\item{data}{feature-by-sample matrix of abundances (proportions or
+counts)}
 
-\item{lambda}{}
+\item{lambda}{positive penalization parameter for the sparsity of feature-feature
+correlations. Default to maxmum value \code{1}, where features are assumed to be 
+independent (no correlations, most sparse)}
 
-\item{control}{}
+\item{control}{a named list of additional control parameters. See help page for
+\code{control_fit}}
 }
 \value{
-
+a list, with the following components:
+\describe{
+\item{EM_fit}{
+list of fitted parameters from the EM algorithm. 
+}
+\item{F_fit}{
+fitted parameters for the joint distribution of per-feature prevalence, abundance,
+and variability parameters (for simulating new features) 
+}
+\item{depth_fit}{fitted parameters for the read depth distribution. Only applicable
+to count data.
+}
+\item{l_filtering}{list of quality control filtering for sample and features.
+}
+}
 }
 \description{
-Title
+\code{fit_SparseDOSSA2} fits the SparseDOSSA 2 model (zero-inflated log normal
+marginals connected through Gaussian copula) to microbial abundances. It takes
+as input a feature-by-sample microbial count or relative abundance table and
+a penalization tuning parameter \code{lambda} to control the sparsity of 
+feature-feature correlations. It then adopts a penalized expectation-maximization
+algorithm to provide estimations of the model parameters.
+}
+\examples{
+data("Stool_subset")
+fitted <- fit_SparseDOSSA2(data = Stool_subset)
+}
+\author{
+Siyuan Ma, \email{siyuan.ma@pennmedicine.upenn.edu}
 }

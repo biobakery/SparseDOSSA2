@@ -125,18 +125,8 @@ generate_featureParam <- function(F_fit, param_original, n_feature) {
   return(param_simulated)
 }
 
-#' Title
-#'
-#' @param features 
-#' @param perc_feature_spiked_metadata 
-#' @param n_metadata 
-#' @param effect_size 
-#' @param spike_metadata 
-#'
-#' @return
+
 #' @importFrom magrittr %>%
-#'
-#' @examples
 generate_feature_metadata_spike_df <- 
   function(features,
            perc_feature_spiked_metadata,

@@ -2,22 +2,57 @@
 % Please edit documentation in R/SparseDOSSA2_fit.R
 \name{fitCV_SparseDOSSA2}
 \alias{fitCV_SparseDOSSA2}
-\title{Title}
+\title{Fit SparseDOSSA 2 model to a microbiome abundance dataset with cross validation}
 \usage{
-fitCV_SparseDOSSA2(data, lambdas, K = 5, control = list())
+fitCV_SparseDOSSA2(
+  data,
+  lambdas = 10^seq(-2, 0, length.out = 5),
+  K = 5,
+  control = list()
+)
 }
 \arguments{
-\item{data}{}
+\item{data}{feature-by-sample matrix of abundances (proportions or
+counts).}
 
-\item{lambdas}{}
+\item{lambdas}{vector of positive penalization parameters for the sparsity of feature-feature
+correlations. The function fits SparseDOSSA 2 models to each of the lambda values, and uses
+cross validation likelihood to select the optimal one. If not provided this will be chosen
+automatically.}
 
-\item{K}{}
-
-\item{control}{}
+\item{control}{a named list of additional control parameters. See help page for
+\code{control_fit}.}
 }
 \value{
-
+a list, with the following components:
+\describe{
+\item{EM_fit}{
+list of fitted parameters from the EM algorithm, with additional cross validation likelihood. 
+}
+\item{F_fit}{
+fitted parameters for the joint distribution of per-feature prevalence, abundance,
+and variability parameters (for simulating new features) 
+}
+\item{depth_fit}{fitted parameters for the read depth distribution. Only applicable
+to count data.
+}
+\item{l_filtering}{list of quality control filtering for sample and features.
+}
+}
 }
 \description{
-Title
+\code{fitCV_SparseDOSSA2} randomly partitions the data into fitting and testing
+subsets. It fits the SparseDOSSA 2 model to the fitting sets and uses log likelihood
+of the fitted parameters in the testing sets as the criteria for selection of 
+tuning parameter lambda.
+}
+\examples{
+data("Stool_subset")
+fitted <- fitCV_SparseDOSSA(data = Stool_subset,
+                            lambdas = c(0.1, 1),
+                            K = 5)
+
+}
+\author{
+Siyuan Ma, \email{siyuan.ma@pennmedicine.upenn.edu}
 }

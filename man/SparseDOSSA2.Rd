@@ -2,48 +2,104 @@
 % Please edit documentation in R/SparseDOSSA2.R
 \name{SparseDOSSA2}
 \alias{SparseDOSSA2}
-\title{Title}
+\title{Simulate synthetic microbial abundance observations with SparseDOSSA2}
 \usage{
 SparseDOSSA2(
   template,
   n_sample,
   new_features = TRUE,
   n_feature,
-  spike_metadata = c("none", "both", "abundance", "presence"),
+  spike_metadata = c("none", "both", "abundance", "prevalence"),
   metadata_effect_size = 1,
   perc_feature_spiked_metadata = 0.05,
   metadata_matrix = NULL,
   feature_metadata_spike_df = NULL,
   median_read_depth = 50000,
-  control = list()
+  verbose = TRUE
 )
 }
 \arguments{
-\item{template}{}
+\item{template}{can be 1) a character string (\code{"Stool"}, \code{"Vaginal"},
+or \code{"IBD"}) indicating one of the pre-trained templates in SparseDOSSA2,
+or 2) user-provided, fitted results. In the latter case this should be an output
+from \code{fit_SparseDOSSA2} or \code{fitCV_SparseDOSSA2}.}
 
-\item{n_sample}{}
+\item{n_sample}{number of samples to simulate}
 
-\item{new_features}{}
+\item{new_features}{\code{TRUE}/\code{FALSE} indicator for whether or not new
+features should be simulated. If \code{FALSE} then the same set of features 
+in \code{template} will be simulated.}
 
-\item{n_feature}{}
+\item{n_feature}{number of features to simulate. Only relevant when 
+\code{new_features} is \code{TRUE}}
 
-\item{spike_metadata}{}
+\item{spike_metadata}{character string of \code{"none"}, \code{"both"}, 
+\code{"abundance"}, or \code{"prevalence"}, indicating whether or not
+association with metadata will be spiked in. For the spiked-in case, it also
+indicates if features' abundance/prevalence/both characteristics will be associated
+with metadata}
 
-\item{metadata_effect_size}{}
+\item{metadata_effect_size}{effect size of the spiked-in associations. This is
+log fold change for abundance spike-in, and log odds ratio for prevalence spike-in}
 
-\item{perc_feature_spiked_metadata}{}
+\item{perc_feature_spiked_metadata}{percentage of features to be associated with metadata}
 
-\item{metadata_matrix}{}
+\item{metadata_matrix}{the user can provide a metadata matrix to use for spiking-in
+of feature abundances. If using default (\code{NULL}) a single variable of balanced
+cases and controls will be generated}
 
-\item{feature_metadata_spike_df}{}
+\item{feature_metadata_spike_df}{the user can provide a data frame to exactly prescribe
+feature-metadata associations. This data frame should have exactly the following columns:
+a) \code{"metadata_datum"} for which metadata to be associated with
+b) \code{"feature_spiked} which features, in
+c) \code{"associated_property"} which property (\code{"abundance"}, \code{"prevalence"}, or \code{"both"}), at
+d) \code{"effect_size"} what effect size. Default to \code{NULL} in which case this
+data frame will be automatically generated for the user, based on \code{spike_metadata}, 
+\code{metadata_effect_size}, \code{perc_feature_spiked_metadata}, and \code{metadata_matrix} (if provided).}
 
-\item{median_read_depth}{}
+\item{median_read_depth}{targeted median per-sample read depth}
 
-\item{control}{}
+\item{verbose}{whether detailed information should be printed}
 }
 \value{
-
+a list with the following component:
+\describe{
+\item{simulated_data}{
+feature by sample matrix of simulated microbial count observations
+}
+\item{simulated_matrices}{
+list of all simulated data matrices, including that of null (i.e. not spiked-in) absolute
+abundances, spiked-in absolute abundances, and normalized relative abundances
+}
+\item{params}{
+parameters used for simulation. These are provided in \code{template}.
+}
+\item{spike_metadata}{
+list of variables provided or generated for metadata spike-in. This include 
+\code{spike_metadata} for the characteristic specified (\code{"abundance"},  
+\code{"prevalence"}, or \code{"both}), \code{metadata_matrix} for the
+metadata (either provided by the user or internally generated), and 
+\code{feature_metadata_spike_df} (either provided by the user or internally generated) 
+for detailed specification of which metadata variables were used to spike-in associations
+with which features, in what properties at which effect sizes.
+}
+}
 }
 \description{
-Title
+\code{SparseDOSSA2} generates synthetic microbial abundance observations
+from either pre-trained template, or user-provided fitted results from
+\code{fit_SparseDOSSA2} or \code{fitCV_SparseDOSSA2}. Additional options
+are available for simulating associations between microbial features
+and metadata variables.
+}
+\examples{
+## Using one of the pre-trained SparseDOSSA2 templates:
+sim <- SparseDOSSA2(template = "stool", n_sample = 200, new_features = FALSE)
+## Using user-provided trained SparseDOSSA2 model:
+data("Stool_subset")
+fitted <- fit_SparseDOSSA(data = stool_subset)
+sim <- SparseDOSSA2(template = fitted, n_sample = 200, new_features = FALSE)
+}
+\author{
+Siyuan Ma, \email{siyuan.ma@pennmedicine.upenn.edu}
 }

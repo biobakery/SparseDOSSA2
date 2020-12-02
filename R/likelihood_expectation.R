@@ -3,25 +3,19 @@ dx <- function(x,
                control = list(),
                log.p = FALSE) {
   control <- do.call(control_integrate, control)
-  if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
     limits <- get_intLimits(
       x = x,
       pi0 = pi0, mu = mu, sigma = sigma, 
       Omega = Omega, Sigma = Sigma, 
       maxit = control$maxit_limits)
     
-    control$lower_loga <- limits[1]
-    control$upper_loga <- limits[2]
-  }
-  
   fit_integrate <- 
     integrate2(vintegrand_dx,
-               lower = control$lower_loga, upper = control$upper_loga, 
+               lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
                precBits = control$precBits,
                method = control$method, 
-               offset = control$offset,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -40,28 +34,33 @@ dx <- function(x,
   }
 }
 
+#' control parameters for the 
+#' numerical integrations during the E step of SparseDOSSA2's fitting
+#'
+#' @param rel_tol relative change threshold in the integration values for the 
+#' integration to converge
+#' @param abs_tol absolute change threshold in the integration values for the 
+#' integration to converge
+#' @param max_eval maximum of integration evaluations allowed
+#' @param maxit_limits maximum number of tries allowed to guess the integration's
+#' lower and upper limits
+#' @param precBits numeric precision used for the integration values
+#' @param only_value whether or not only the integration value should be returned
+#'
+#' @return a list of the same names
+#' @export
 control_integrate <- function(rel_tol = 1e-2,
                               abs_tol = 0,
                               max_eval = 50,
-                              method = "spline",
                               maxit_limits = 10,
-                              limit_tol = 1e-5,
                               precBits = 200,
-                              offset = FALSE, 
-                              lower_loga = NULL,
-                              upper_loga = NULL,
                               only_value = TRUE) {
-  list(lower_loga = lower_loga,
-       upper_loga = upper_loga,
-       rel_tol = rel_tol,
-       limit_tol = limit_tol,
-       precBits = precBits,
+  list(rel_tol = rel_tol,
        abs_tol = abs_tol,
        max_eval = max_eval,
-       method = method,
-       offset = offset,
-       only_value = only_value,
-       maxit_limits = maxit_limits)
+       maxit_limits = maxit_limits,
+       precBits = precBits,
+       only_value = only_value)
 }
 
 ploga <- function(a, 
@@ -331,24 +330,18 @@ ea <- function(x,
                pi0, mu, sigma, Omega, Sigma,
                control = list()) {
   control <- do.call(control_integrate, control)
-  if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
-    limits <- get_intLimits(
-      x = x,
-      pi0 = pi0, mu = mu, sigma = sigma, 
-      Omega = Omega, Sigma = Sigma,
-      maxit = control$maxit_limits)
-    
-    control$lower_loga <- limits[1]
-    control$upper_loga <- limits[2]
-  }
+  limits <- get_intLimits(
+    x = x,
+    pi0 = pi0, mu = mu, sigma = sigma, 
+    Omega = Omega, Sigma = Sigma,
+    maxit = control$maxit_limits)
   
   fit_integrate <- 
     integrate2(vintegrand_ea,
-               lower = control$lower_loga, upper = control$upper_loga, 
+               lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
                method = control$method, 
-               offset = control$offset,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -384,24 +377,18 @@ eloga <- function(x,
                   pi0, mu, sigma, Omega, Sigma,
                   control = list()) {
   control <- do.call(control_integrate, control)
-  if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
     limits <- get_intLimits(
       x = x,
       pi0 = pi0, mu = mu, sigma = sigma, 
       Omega = Omega, Sigma = Sigma,
       maxit = control$maxit_limits)
-    
-    control$lower_loga <- limits[1]
-    control$upper_loga <- limits[2]
-  }
   
   fit_integrate <- 
     integrate2(vintegrand_eloga,
-               lower = control$lower_loga, upper = control$upper_loga, 
+               lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
                method = control$method, 
-               offset = control$offset,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -436,24 +423,18 @@ eloga2 <- function(x,
                    pi0, mu, sigma, Omega, Sigma,
                    control = list()) {
   control <- do.call(control_integrate, control)
-  if(is.null(control$lower_loga) | is.null(control$upper_loga)) {
     limits <- get_intLimits(
       x = x,
       pi0 = pi0, mu = mu, sigma = sigma, 
       Omega = Omega, Sigma = Sigma,
       maxit = control$maxit_limits)
     
-    control$lower_loga <- limits[1]
-    control$upper_loga <- limits[2]
-  }
-  
   fit_integrate <- 
     integrate2(vintegrand_eloga2,
-               lower = control$lower_loga, upper = control$upper_loga, 
+               lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
                method = control$method, 
-               offset = control$offset,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -484,15 +465,6 @@ integrand_eloga2 <- function(log_asum, x,
 vintegrand_eloga2 <- Vectorize2(integrand_eloga2, 
                                 vectorize.args = "log_asum")
 
-#' Title
-#'
-#' @param x 
-#' @param pi0 
-#' @param mu 
-#' @param sigma 
-#' @param Omega 
-#' @param Sigma 
-#' @param control 
 get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
                    control) {
   time_start <- Sys.time()

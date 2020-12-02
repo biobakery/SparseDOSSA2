@@ -6,9 +6,9 @@ Author: Siyuan Ma
 Maintainer: Siyuan Ma <siyuan.ma@pennmedicine.upenn.edut>
 Description: SparseDOSSA 2 is an R package for fitting to and the simulation of realistic microbial
     abundance observations. It provides functionlaities for:
-    a) fitting the SparseDOSSA 2 model to real-world microbial abundance observations, 
-    b) generation of synthetic microbial observations, based on either pre-fitted template that the package provides, or user-trained results from a),
-    c) spiking-in of associations with metadata variables or between feature pairs, for e.g. benchmarking or power analysis purposes.
+    a) generation of synthetic microbial observations, based on either pre-fitted template that the package provides, or user-trained results.
+    b) spiking-in of associations with metadata variables or between feature pairs, for e.g. benchmarking or power analysis purposes.
+    c) fitting the SparseDOSSA 2 model to real-world microbial abundance observations.
 License: MIT + file LICENSE
 Encoding: UTF-8
 RoxygenNote: 7.0.2

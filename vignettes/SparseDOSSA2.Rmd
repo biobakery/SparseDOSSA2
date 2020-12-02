@@ -1,30 +1,34 @@
-<!-- # --- -->
-<!-- title: "Simulating realistic microbial observations with SparseDOSSA2" -->
-<!-- author:  -->
-<!-- - name: "Siyuan Ma" -->
-  <!-- affiliation:  -->
-  <!-- - Harvard T.H. Chan School of Public Health -->
-  <!-- - Broad Institute -->
-  <!-- email: siyuanma@g.harvard.edu -->
-<!-- package: SparseDOSSA2 -->
-<!-- date: "07/10/2020" -->
-<!-- output:  -->
-  <!-- BiocStyle::html_document -->
-<!-- vignette: > -->
-  <!-- %\VignetteIndexEntry{SparseDOSSA2} -->
-  <!-- %\VignetteEngine{knitr::rmarkdown} -->
-  <!-- %\VignetteEncoding{UTF-8}   -->
-<!-- bibliography: references.bib -->
-<!-- --- -->
+# ---
+title: "Simulating realistic microbial observations with SparseDOSSA2"
+author:
+- name: "Siyuan Ma"
+affiliation:
+- Harvard T.H. Chan School of Public Health
+- Broad Institute
+email: siyuan.ma@pennmedicine.upenn.edu
+package: SparseDOSSA2
+date: "12/01/2020"
+output:
+BiocStyle::html_document
+vignette: >
+%\VignetteIndexEntry{SparseDOSSA2}
+%\VignetteEngine{knitr::rmarkdown}
+%\VignetteEncoding{UTF-8}
+bibliography: references.bib
+---
 
-<!-- # ```{r setup, include=FALSE} -->
-<!-- knitr::opts_chunk$set(echo = TRUE) -->
-<!-- knitr::opts_chunk$set(cache = FALSE) -->
-<!-- ``` -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = FALSE)
+```
 
 # Introduction
 
-`SparseDOSSA2` is an R package for fitting and simulation of realistic microbial abundance observations.
+`SparseDOSSA2` an R package for fitting to and the simulation of realistic microbial
+abundance observations. It provides functionlaities for: a) generation of realistic synthetic microbial observations, b) spiking-in of associations with metadata variables 
+for e.g. benchmarking or power analysis purposes, and c) fitting the SparseDOSSA 2 
+model to real-world microbial abundance observations that can be used for a). This vignette is intended to provide working examples for these functionalities. 
 
 ```{r, message=FALSE}
 library(SparseDOSSA2)
@@ -36,39 +40,62 @@ library(ggplot2)
 
 # Installation
 
-SparseDOSSA2 is available through GitHub as of now and can be installed via the 
-following command.
+SparseDOSSA2 is a Bioconductor package and can be installed via the following 
+command.
 
 ```{r Installation, eval = FALSE}
-devtools::install_github("biobakery/SparseDOSSA2")
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("SparseDOSSA2")
 ```
 
-# Input data
+# Simulating realistic microbial observations with `SparseDOSSA2`
+The most important functionality of `SparseDOSSA2` is the simulation of
+realistic synthetic microbial observations. To this end, `SparseDOSSA2` provides
+three pre-trained templates, `"Stool"`, `"Vaginal"`, and `"IBD"`, targeting
+continuous, discrete, and diseased population structures. 
+```{r SparseDOSSA2_generate}
+Stool_simulation <- SparseDOSSA2(template = "Stool", 
+                                 n_sample = 100, 
+                                 n_feature = 100,
+                                 verbose = TRUE)
+Vaginal_simulation <- SparseDOSSA2(template = "Vaginal", 
+                                   n_sample = 100, 
+                                   n_feature = 100,
+                                   verbose = TRUE)
+```
 
-As input, `SparseDOSSA2` requires a feature-by-sample abundance table of microbial 
-abundance observations. They can be either count or on the relative abundance
-scale.
+# Fitting to microbiome datasets with SparseDOSSA2
+
+SparseDOSSA2 provide two functions, `fit_SparseDOSSA2` and `fitCV_SparseDOSSA2`,
+to fit the SparseDOSSA2 model to microbial count or relative abundance observations.
+For these functions, as input, `SparseDOSSA2` requires a feature-by-sample 
+table of microbial abundance observations. We provide with SparseDOSSA2 a minimal
+example of such a dataset: a five-by-five of the [HMP1-II](https://www.hmpdacc.org/hmp/) 
+stool study.
 
 ```{r load data}
-data("HMP_stool", package = "SparseDOSSA2")
+data("Stool_subset", package = "SparseDOSSA2")
 # columns are samples.
-stool[1:5, 1, drop = FALSE]
+Stool_subset[1:2, 1, drop = FALSE]
 ```
 
-# Fitting SparseDOSSA2 model with `fit_SparseDOSSA2`
+## Fitting SparseDOSSA2 model with `fit_SparseDOSSA2`
 
-`fit_SparseDOSSA2` fits the SparseDOSSA2 hierarchical model to estimate the 
-model parameters: per-feature prevalence, and mean and standard deviation of 
-non-zero abundances. It also estimates joint distribution of these parameters
+`fit_SparseDOSSA2` fits the SparseDOSSA2 model to estimate the 
+model parameters: per-feature prevalence, mean and standard deviation of 
+non-zero abundances, and feature-feature correlations. 
+It also estimates joint distribution of these parameters
 and (if input is count) a read count distribution.
 
 ```{r SparseDOSSA2_fit}
-SparseDOSSA2_fit <- fit_SparseDOSSA2(data = stool,
-                                     control = list(verbose = TRUE))
-names(SparseDOSSA2_fit)
+fitted <- fit_SparseDOSSA2(data = Stool_subset,
+                           control = list(verbose = TRUE))
+# fitted mean log non-zero abundance values of the first two features
+fitted$EM_fit$fit$mu[1:2]
 ```
 
-# Fitting SparseDOSSA2 model with `fitCV_SparseDOSSA2`
+## Fitting SparseDOSSA2 model with `fitCV_SparseDOSSA2`
 
 The user can additionally achieve optimal model fitting via 
 `fitCV_SparseDOSSA2`. They can either provide a vector of tuning parameter
@@ -82,38 +109,54 @@ observations on the same features as the input (i.e. not new features).
 
 ```{r SparseDOSSA2_fit_CV}
 set.seed(1)
-SparseDOSSA2_CVfit <- fitCV_SparseDOSSA2(data = stool,
+fitted_CV <- fitCV_SparseDOSSA2(data = Stool_subset,
                                          lambdas = c(0.1, 1),
                                          K = 2,
                                          control = list(verbose = TRUE))
-names(SparseDOSSA2_CVfit)
+# the average log likelihood of different tuning parameters
+apply(fitted_CV$EM_fit$logLik_CV, 2, mean)
+# The second lambda (1) had better performance in terms of log likelihood,
+# and will be selected as the default fit.
 ```
 
-# Simulating realistic microbial observations with `SparseDOSSA2`
-```{r SparseDOSSA2_generate}
-SparseDOSSA2_simulation <- SparseDOSSA2(template = SparseDOSSA2_fit,
-                                        new_features = TRUE,
-                                        n_sample = 100,
-                                        n_feature = 200,
-                                        spike_metadata = "abundance",
-                                        control = list(verbose = TRUE))
-names(SparseDOSSA2_simulation)
-head(SparseDOSSA2_simulation$spike_metadata$feature_metadata_spike_df)
-```
+## Parallelization controls with `future`
 
-# Parallelization controls with `future`
+`SparseDOSSA2` internally uses `r BiocStyle::CRANpkg("future")` to allow for
+parallel computation. The user can thus specify parallelization through `future`'s
+interface. See the [reference manual](https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html) 
+for `future` for more details. This is 
+particularly suited if fitting `SparseDOSSA2` in a high-performance computing
+environment/
 
 ```{r future}
-# future::plan(future::sequential, future::multicore)
-# fit_SparseDOSSA2 <- SparseDOSSA2_fit(data = stool,
-#                                      control = list(verbose = TRUE))
-# 
-# future::plan(future::sequential, future::sequential, future::multicore)
-# fit_SparseDOSSA2 <- SparseDOSSA2_fit_CV(data = stool,
-#                                         lambdas = c(0.1, 1),
-#                                         K = 2,
-#                                         control = list(verbose = TRUE))
+## regular fitting 
+# system.time(fitted_regular <- 
+#               fit_SparseDOSSA2(data = Stool_subset,
+#                                control = list(verbose = FALSE)))
+## parallel fitting with future:
+# future::plan(future::multisession())
+# system.time(fitted_parallel <- 
+#               fit_SparseDOSSA2(data = Stool_subset,
+#                                control = list(verbose = FALSE)))
+
+## For CV fitting, there are three components that can be paralleled, in order:
+## different cross validation folds, different tuning parameter lambdas, 
+## and different samples. It is usually most efficient to parallelize at the
+## sample level:
+# system.time(fitted_regular_CV <-
+#               fitCV_SparseDOSSA2(data = Stool_subset,
+#                                  lambdas = c(0.1, 1),
+#                                  K = 2,
+#                                  control = list(verbose = TRUE)))
+# future::plan(future::sequential(), future::sequential(), future::multisession())
+# system.time(fitted_parallel_CV <-
+#               fitCV_SparseDOSSA2(data = Stool_subset,
+#                                  lambdas = c(0.1, 1),
+#                                  K = 2,
+#                                  control = list(verbose = TRUE)))
+
 ```
+
 
 # Sessioninfo
 ```{r sessioninfo}

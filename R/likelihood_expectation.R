@@ -490,16 +490,29 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
   # find knots using dx
   verrors <- Rmpfr::mpfr(c(), precBits = control$precBits)
   while(TRUE) {
-    i_max_error <- which(errors_spline == max(errors_spline))[1]
-    knots_spline <- c(knots_spline[seq(1, i_max_error)],
-                      Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
-                      knots_spline[seq(i_max_error + 1, neval)])
-    vals_spline <- c(vals_spline[seq(1, i_max_error)],
-                     Rmpfr::mpfr(vintegrand_dx(as.double(knots_spline[i_max_error + 1]),
-                                               pi0 = pi0, x = x, mu = mu, sigma = sigma,
-                                               Omega = Omega, Sigma = Sigma),
-                                 precBits = control$precBits),
-                     vals_spline[seq(i_max_error + 1, neval)])
+    if(neval * 2 == max_eval | 
+       neval * 2 == max_eval + 1) {
+      i_max2 <- order(-vals_spline)[c(1, 2)]
+      if(abs(i_max2[2] - i_max2[1]) != 1)
+        stop("The two maximum values should be adjacent! Probably should increase integration evaluations.")
+      i_max2 <- sort(i_max2)
+      knots_spline <- c(knots_spline[seq(1, i_max2[1])],
+                        Rmpfr::mean(knots_spline[i_max2]),
+                        knots_spline[seq(i_max2[2], neval)])
+      vals_spline <- c(vals_spline[seq(1, i_max2[1])],
+                       Rmpfr::mpfr(vintegrand_dx(as.double(knots_spline[i_max2[1] + 1])),
+                                   precBits = precBits),
+                       vals_spline[seq(i_max2[2], neval)])
+    } else {
+      i_max_error <- which(errors_spline == max(errors_spline))[1]
+      knots_spline <- c(knots_spline[seq(1, i_max_error)],
+                        Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
+                        knots_spline[seq(i_max_error + 1, neval)])
+      vals_spline <- c(vals_spline[seq(1, i_max_error)],
+                       Rmpfr::mpfr(vintegrand_dx(as.double(knots_spline[i_max_error + 1])),
+                                   precBits = precBits),
+                       vals_spline[seq(i_max_error + 1, neval)])
+    }
     
     neval <- neval + 1
     knots_diff <-  knots_spline[-1] - knots_spline[-neval]

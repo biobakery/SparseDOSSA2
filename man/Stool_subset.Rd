@@ -4,7 +4,9 @@
 \name{Stool_subset}
 \alias{Stool_subset}
 \title{A subset of the HMP1-II stool samples}
-\format{A matrix with 5 rows (species) and 5 columns (samples)}
+\format{
+A matrix with 5 rows (species) and 5 columns (samples)
+}
 \source{
 \url{https://www.hmpdacc.org/hmp/}
 }

@@ -11,7 +11,7 @@ Description: SparseDOSSA 2 is an R package for fitting to and the simulation of 
     c) fitting the SparseDOSSA 2 model to real-world microbial abundance observations.
 License: MIT + file LICENSE
 Encoding: UTF-8
-RoxygenNote: 7.0.2
+RoxygenNote: 7.1.0
 Depends:
   ks,
   mvtnorm,

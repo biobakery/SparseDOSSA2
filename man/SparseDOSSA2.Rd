@@ -51,7 +51,7 @@ cases and controls will be generated}
 \item{feature_metadata_spike_df}{the user can provide a data frame to exactly prescribe
 feature-metadata associations. This data frame should have exactly the following columns:
 a) \code{"metadata_datum"} for which metadata to be associated with
-b) \code{"feature_spiked} which features, in
+b) \code{"feature_spiked"} which features, in
 c) \code{"associated_property"} which property (\code{"abundance"}, \code{"prevalence"}, or \code{"both"}), at
 d) \code{"effect_size"} what effect size. Default to \code{NULL} in which case this
 data frame will be automatically generated for the user, based on \code{spike_metadata}, 
@@ -77,7 +77,7 @@ parameters used for simulation. These are provided in \code{template}.
 \item{spike_metadata}{
 list of variables provided or generated for metadata spike-in. This include 
 \code{spike_metadata} for the characteristic specified (\code{"abundance"},  
-\code{"prevalence"}, or \code{"both}), \code{metadata_matrix} for the
+\code{"prevalence"}, or \code{"both"}), \code{metadata_matrix} for the
 metadata (either provided by the user or internally generated), and 
 \code{feature_metadata_spike_df} (either provided by the user or internally generated) 
 for detailed specification of which metadata variables were used to spike-in associations

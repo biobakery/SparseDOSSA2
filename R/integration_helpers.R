@@ -1,8 +1,81 @@
 integrate2 <- function(f, 
+                           lower, upper, 
+                           rel_tol, abs_tol, max_eval, 
+                           precBits,
+                           ...) {
+  if(lower == 0 & upper == 0)
+    return(list(integral = 0,
+                error = 0,
+                neval = 0,
+                returnCode = 1))
+  
+  ff <- function(x) f(x, ...)
+  
+  neval <- 2
+  knots_spline <- Rmpfr::mpfr(c(lower, upper),
+                              precBits = precBits)
+  vals_spline <- 
+    Rmpfr::mpfr(
+      ff(as.double(knots_spline)), 
+      precBits = precBits)
+  errors_spline <- Inf
+  
+  while(TRUE) {
+    i_max_error <- which(errors_spline == max(errors_spline))[1]
+    knots_spline <- c(knots_spline[seq(1, i_max_error)],
+                      Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
+                      knots_spline[seq(i_max_error + 1, neval)])
+    
+    vals_spline <- c(vals_spline[seq(1, i_max_error)],
+                     Rmpfr::mpfr(ff(as.double(knots_spline[i_max_error + 1])),
+                                 precBits = precBits),
+                     vals_spline[seq(i_max_error + 1, neval)])
+    
+    neval <- neval + 1
+    knots_diff <-  knots_spline[-1] - knots_spline[-neval]
+    # linear spline for estimating integration
+    coefs_spline <- Rmpfr::mpfrArray(NA, precBits = precBits,
+                                     dim = c(2, neval - 1))
+    coefs_spline[2, ] <- 
+      (vals_spline[-1] - vals_spline[-neval]) /
+      knots_diff
+    coefs_spline[1, ] <- 
+      vals_spline[-neval] - knots_spline[-neval] * coefs_spline[2, ]
+    integral <- sum(coefs_spline[1, ] * knots_spline[-1] +
+                      coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
+                      coefs_spline[1, ] * knots_spline[-neval] - 
+                      coefs_spline[2, ] / 2 * knots_spline[-neval]^2)
+    
+    # error estimation
+    errors_spline <- estimate_errors(
+      knots_diff, 
+      c(Rmpfr::mpfr(0, precBits = precBits), 
+        coefs_spline[2, ], 
+        Rmpfr::mpfr(0, precBits = precBits)))
+    error <- sum(errors_spline)
+    
+    if(neval >= max_eval)
+      break
+    if(integral < 0)
+      stop("Negative integration values; something went wrong!")
+    if(integral > 0)
+      if(error / abs(integral) < rel_tol |
+         error < abs_tol)
+        break
+  }
+  return(list(integral = integral,
+              error = error,
+              neval = neval,
+              returnCode = 0,
+              debug = list(knots_spline = knots_spline,
+                           vals_spline = vals_spline,
+                           errors_spline = errors_spline)))
+}
+
+integrate2_old <- function(f, 
                        lower, upper, 
                        rel_tol, abs_tol, max_eval, 
                        precBits,
-                       method, 
                        ...) {
   if(lower == 0 & upper == 0)
     return(list(integral = 0,
@@ -79,7 +152,10 @@ integrate2 <- function(f,
   return(list(integral = integral,
               error = error,
               neval = neval,
-              returnCode = 0))
+              returnCode = 0,
+              debug = list(knots_spline = knots_spline,
+                           vals_spline = vals_spline,
+                           errors_spline = errors_spline)))
 }
 
 
@@ -212,4 +288,42 @@ Vectorize2 <- function(FUN, vectorize.args = arg.names, SIMPLIFY = TRUE,
   }
   formals(FUNV) <- formals(FUN)
   FUNV
+}
+
+estimate_errors <- function(knots_diff, slopes) {
+  if(length(knots_diff) != length(slopes) - 2)
+    stop("Length of knots_diff and slopes should agree!")
+  errors <- rep(NA, length = length(knots_diff))
+  
+  y3s <- knots_diff * slopes[-c(1, length(slopes))]
+  errors <- 
+    Rmpfr::sapplyMpfr(seq_along(knots_diff),
+                      function(i_region)
+                        estimate_one_error(
+                          knots_diff[i_region],
+                          y3s[i_region],
+                          slopes[c(i_region, i_region + 1, i_region + 2)]
+                        ))
+  
+  return(errors)
+}
+
+estimate_one_error <- function(x3, y3, slopes) {
+  slope1 <- slopes[1]
+  slope2 <- slopes[3]
+  if((slope1 <= slopes[2] & slopes[2] <= slope2) |
+     (slope1 >= slopes[2] & slopes[2] >= slope2)) {
+    # function is convex/concave here
+    
+    # if slopes are the same
+    if(slope1 == slope2)
+      return(0)
+
+    # if not calculate where lines meet
+    x2 <- (slope2 * x3 - y3) / (slope2 - slope1)
+    y2 <- x2 * slope1
+    return(abs(x2 * y3 - x3 * y2) / 2)
+  } else {
+    return(abs(x3 * y3) / 2)
+  }
 }

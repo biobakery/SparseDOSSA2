@@ -3,11 +3,11 @@ dx <- function(x,
                control = list(),
                log.p = FALSE) {
   control <- do.call(control_integrate, control)
-    limits <- get_intLimits(
-      x = x,
-      pi0 = pi0, mu = mu, sigma = sigma, 
-      Omega = Omega, Sigma = Sigma, 
-      maxit = control$maxit_limits)
+  limits <- get_intLimits(
+    x = x,
+    pi0 = pi0, mu = mu, sigma = sigma, 
+    Omega = Omega, Sigma = Sigma, 
+    maxit = control$maxit_limits)
     
   fit_integrate <- 
     integrate2(vintegrand_dx,
@@ -15,7 +15,6 @@ dx <- function(x,
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
                precBits = control$precBits,
-               method = control$method, 
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -341,7 +340,6 @@ ea <- function(x,
                lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
-               method = control$method, 
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -388,7 +386,6 @@ eloga <- function(x,
                lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
-               method = control$method, 
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -434,7 +431,6 @@ eloga2 <- function(x,
                lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
-               method = control$method, 
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -488,38 +484,19 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
   errors_spline <- Inf
   
   # find knots using dx
-  verrors <- Rmpfr::mpfr(c(), precBits = control$precBits)
   while(TRUE) {
-    if(neval * 2 == max_eval | 
-       neval * 2 == max_eval + 1) {
-      i_max2 <- order(-vals_spline)[c(1, 2)]
-      if(abs(i_max2[2] - i_max2[1]) != 1)
-        stop("The two maximum values should be adjacent! Probably should increase integration evaluations.")
-      i_max2 <- sort(i_max2)
-      knots_spline <- c(knots_spline[seq(1, i_max2[1])],
-                        Rmpfr::mean(knots_spline[i_max2]),
-                        knots_spline[seq(i_max2[2], neval)])
-      vals_spline <- c(vals_spline[seq(1, i_max2[1])],
-                       Rmpfr::mpfr(vintegrand_dx(as.double(knots_spline[i_max2[1] + 1])),
-                                   precBits = precBits),
-                       vals_spline[seq(i_max2[2], neval)])
-    } else {
-      i_max_error <- which(errors_spline == max(errors_spline))[1]
-      knots_spline <- c(knots_spline[seq(1, i_max_error)],
-                        Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
-                        knots_spline[seq(i_max_error + 1, neval)])
-      vals_spline <- c(vals_spline[seq(1, i_max_error)],
-                       Rmpfr::mpfr(vintegrand_dx(as.double(knots_spline[i_max_error + 1])),
-                                   precBits = precBits),
-                       vals_spline[seq(i_max_error + 1, neval)])
-    }
+    i_max_error <- which(errors_spline == max(errors_spline))[1]
+    knots_spline <- c(knots_spline[seq(1, i_max_error)],
+                      Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
+                      knots_spline[seq(i_max_error + 1, neval)])
+    vals_spline <- c(vals_spline[seq(1, i_max_error)],
+                     Rmpfr::mpfr(vintegrand_dx(as.double(knots_spline[i_max_error + 1])),
+                                 precBits = control$precBits),
+                     vals_spline[seq(i_max_error + 1, neval)])
     
     neval <- neval + 1
     knots_diff <-  knots_spline[-1] - knots_spline[-neval]
-    errors_spline <- 
-      abs(knots_diff *
-            (vals_spline[-1] - vals_spline[-neval]))
-    
+    # linear spline for estimating integration
     coefs_spline <- Rmpfr::mpfrArray(NA, precBits = control$precBits,
                                      dim = c(2, neval - 1))
     coefs_spline[2, ] <- 
@@ -531,8 +508,13 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
                          coefs_spline[2, ] / 2 * knots_spline[-1]^2 -
                          coefs_spline[1, ] * knots_spline[-neval] - 
                          coefs_spline[2, ] / 2 * knots_spline[-neval]^2)
+    # error estimation
+    errors_spline <- estimate_errors(
+      knots_diff, 
+      c(Rmpfr::mpfr(0, precBits = control$precBits), 
+        coefs_spline[2, ], 
+        Rmpfr::mpfr(0, precBits = control$precBits)))
     error_dx <- sum(errors_spline)
-    verrors <- c(verrors, error_dx)
     
     if(neval >= control$max_eval)
       break

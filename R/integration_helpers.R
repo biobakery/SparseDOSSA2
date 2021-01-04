@@ -51,7 +51,8 @@ integrate2 <- function(f,
       knots_diff, 
       c(Rmpfr::mpfr(0, precBits = precBits), 
         coefs_spline[2, ], 
-        Rmpfr::mpfr(0, precBits = precBits)))
+        Rmpfr::mpfr(0, precBits = precBits)),
+      precBits = precBits)
     error <- sum(errors_spline)
     
     if(neval >= max_eval)
@@ -203,7 +204,7 @@ Vectorize2 <- function(FUN, vectorize.args = arg.names, SIMPLIFY = TRUE,
   FUNV
 }
 
-estimate_errors <- function(knots_diff, slopes) {
+estimate_errors <- function(knots_diff, slopes, precBits) {
   if(length(knots_diff) != length(slopes) - 2)
     stop("Length of knots_diff and slopes should agree!")
   errors <- rep(NA, length = length(knots_diff))
@@ -215,13 +216,14 @@ estimate_errors <- function(knots_diff, slopes) {
                         estimate_one_error(
                           knots_diff[i_region],
                           y3s[i_region],
-                          slopes[c(i_region, i_region + 1, i_region + 2)]
+                          slopes[c(i_region, i_region + 1, i_region + 2)],
+                          precBits = precBits
                         ))
   
   return(errors)
 }
 
-estimate_one_error <- function(x3, y3, slopes) {
+estimate_one_error <- function(x3, y3, slopes, precBits) {
   slope1 <- slopes[1]
   slope2 <- slopes[3]
   if((slope1 <= slopes[2] & slopes[2] <= slope2) |
@@ -230,7 +232,7 @@ estimate_one_error <- function(x3, y3, slopes) {
     
     # if slopes are the same
     if(slope1 == slope2)
-      return(0)
+      return(Rmpfr::mpfr(0, precBits = precBits))
 
     # if not calculate where lines meet
     x2 <- (slope2 * x3 - y3) / (slope2 - slope1)

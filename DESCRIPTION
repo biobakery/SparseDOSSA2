@@ -21,7 +21,11 @@ Depends:
   truncnorm,
   igraph,
   Rmpfr
+VignetteBuilder: knitr
 Suggests:
   testthat (>= 2.1.0),
-  cubature
+  cubature,
+  BiocStyle,
+  knitr,
+  rmarkdown
 biocViews: Metagenomics, Microbiome, StatisticalMethod

@@ -19,6 +19,7 @@ Depends:
   future.apply,
   magrittr,
   truncnorm,
+  tmvtnorm,
   igraph,
   Rmpfr
 VignetteBuilder: knitr

@@ -107,28 +107,28 @@ computationally intensive procedure, and best-suited for users that would like
 accurate fitting to the input dataset, for best simulated new microbial 
 observations on the same features as the input (i.e. not new features).
 
-```{r SparseDOSSA2_fit_CV}
-set.seed(1)
-fitted_CV <- fitCV_SparseDOSSA2(data = Stool_subset,
-                                         lambdas = c(0.1, 1),
-                                         K = 2,
-                                         control = list(verbose = TRUE))
+ ```{r SparseDOSSA2_fit_CV}
+# set.seed(1)
+# fitted_CV <- fitCV_SparseDOSSA2(data = Stool_subset,
+#                                         lambdas = c(0.1, 1),
+#                                         K = 2,
+#                                         control = list(verbose = TRUE))
 # the average log likelihood of different tuning parameters
-apply(fitted_CV$EM_fit$logLik_CV, 2, mean)
+# apply(fitted_CV$EM_fit$logLik_CV, 2, mean)
 # The second lambda (1) had better performance in terms of log likelihood,
 # and will be selected as the default fit.
-```
+# ```
 
 ## Parallelization controls with `future`
 
-`SparseDOSSA2` internally uses `r BiocStyle::CRANpkg("future")` to allow for
-parallel computation. The user can thus specify parallelization through `future`'s
-interface. See the [reference manual](https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html) 
-for `future` for more details. This is 
-particularly suited if fitting `SparseDOSSA2` in a high-performance computing
-environment/
+#`SparseDOSSA2` internally uses `r BiocStyle::CRANpkg("future")` to allow for
+#parallel computation. The user can thus specify parallelization through `future`'s
+#interface. See the [reference #manual](https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html) 
+#for `future` for more details. This is 
+#particularly suited if fitting `SparseDOSSA2` in a high-performance computing
+#environment/
 
-```{r future}
+#```{r future}
 ## regular fitting 
 # system.time(fitted_regular <- 
 #               fit_SparseDOSSA2(data = Stool_subset,

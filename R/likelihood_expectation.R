@@ -493,7 +493,9 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
                       Rmpfr::mean(knots_spline[c(i_max_error, i_max_error + 1)]),
                       knots_spline[seq(i_max_error + 1, neval)])
     vals_spline <- c(vals_spline[seq(1, i_max_error)],
-                     Rmpfr::mpfr(vintegrand_dx(as.double(knots_spline[i_max_error + 1])),
+                     Rmpfr::mpfr(vintegrand_dx(as.double(knots_spline[i_max_error + 1]),
+                                               pi0 = pi0, x = x, mu = mu, sigma = sigma,
+                                               Omega = Omega, Sigma = Sigma),
                                  precBits = control$precBits),
                      vals_spline[seq(i_max_error + 1, neval)])
     

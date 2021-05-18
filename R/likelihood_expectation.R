@@ -340,6 +340,7 @@ ea <- function(x,
                lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
+               precBits = control$precBits,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -386,6 +387,7 @@ eloga <- function(x,
                lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
+               precBits = control$precBits,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -431,6 +433,7 @@ eloga2 <- function(x,
                lower = limits[1], upper = limits[2], 
                rel_tol = control$rel_tol, abs_tol = control$abs_tol, 
                max_eval = control$max_eval,
+               precBits = control$precBits,
                x = x, pi0 = pi0, mu = mu, sigma = sigma, 
                Omega = Omega, Sigma = Sigma)
   
@@ -513,7 +516,8 @@ get_es <- function(x, pi0, mu, sigma, Omega, Sigma,
       knots_diff, 
       c(Rmpfr::mpfr(0, precBits = control$precBits), 
         coefs_spline[2, ], 
-        Rmpfr::mpfr(0, precBits = control$precBits)))
+        Rmpfr::mpfr(0, precBits = control$precBits)),
+      precBits = control$precBits)
     error_dx <- sum(errors_spline)
     
     if(neval >= control$max_eval)

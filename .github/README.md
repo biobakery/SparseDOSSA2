@@ -5,6 +5,8 @@ Author Name: "Siyuan Ma"
 Affiliation: Harvard T.H. Chan School of Public Health.  
 Broad Institute email: siyuan.ma@pennmedicine.upenn.edu 
 
+Tutorial: https://github.com/biobakery/biobakery/wiki/SparseDOSSA2
+
 # Introduction
 SparseDOSSA2 an R package for fitting to and the simulation of realistic microbial abundance observations. It provides functionlaities for: a) generation of realistic synthetic microbial observations, b) spiking-in of associations with metadata variables for e.g. benchmarking or power analysis purposes, and c) fitting the SparseDOSSA 2 model to real-world microbial abundance observations that can be used for a). This vignette is intended to provide working examples for these functionalities.
 

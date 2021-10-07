@@ -54,5 +54,5 @@ fitted <- fitCV_SparseDOSSA(data = Stool_subset,
 
 }
 \author{
-Siyuan Ma, \email{siyuan.ma@pennmedicine.upenn.edu}
+Siyuan Ma, \email{syma.research@gmail.com}
 }

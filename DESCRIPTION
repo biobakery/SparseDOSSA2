@@ -1,7 +1,7 @@
 Package: SparseDOSSA2
 Type: Package
 Title: A Statistical Model for Describing and Simulating Microbial Community Profiles
-Version: 0.99.1
+Version: 0.99.2
 Author: Siyuan Ma
 Maintainer: Siyuan Ma <syma.research@gmail.com>
 Description: SparseDOSSA 2 is an R package for fitting to and the simulation of realistic microbial
@@ -11,7 +11,7 @@ Description: SparseDOSSA 2 is an R package for fitting to and the simulation of 
     c) fitting the SparseDOSSA 2 model to real-world microbial abundance observations.
 License: MIT + file LICENSE
 Encoding: UTF-8
-RoxygenNote: 7.1.0
+RoxygenNote: 7.1.2
 Depends:
   ks,
   mvtnorm,

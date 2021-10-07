@@ -47,5 +47,5 @@ data("Stool_subset")
 fitted <- fit_SparseDOSSA2(data = Stool_subset)
 }
 \author{
-Siyuan Ma, \email{siyuan.ma@pennmedicine.upenn.edu}
+Siyuan Ma, \email{syma.research@gmail.com}
 }

@@ -16,25 +16,50 @@
 #' in \code{template} will be simulated.
 #' @param n_feature number of features to simulate. Only relevant when 
 #' \code{new_features} is \code{TRUE}
-#' @param spike_metadata character string of \code{"none"}, \code{"both"}, 
-#' \code{"abundance"}, or \code{"prevalence"}, indicating whether or not
-#' association with metadata will be spiked in. For the spiked-in case, it also
+#' @param spike_metadata for metadata spike-in configurations. Must be one of two things:
+#' a) , 
+#' \itemize{
+#' \item a character string of \code{"none"}, \code{"both"} \code{"abundance"}, 
+#' or \code{"prevalence"}, indicating whether or not
+#' association with metadata will be spiked in. For the spiked-in case, it
 #' indicates if features' abundance/prevalence/both characteristics will be associated
-#' with metadata
-#' @param metadata_effect_size effect size of the spiked-in associations. This is
-#' log fold change for abundance spike-in, and log odds ratio for prevalence spike-in
-#' @param perc_feature_spiked_metadata percentage of features to be associated with metadata 
+#' with metadata (also see explanations for \code{metadata_effect_size} and 
+#' \code{perc_feature_spiked_metadata})
+#' \item a data.frame for detailed spike-in configurations. This is the more 
+#' advanced approach, where detailed specification for metadata-microbial 
+#' feature associations are provided. Note: if \code{spike_metadata} is provided
+#' as a data.frame, then \code{metadata_matrix} must be provided as well 
+#' (cannot be generated automatically). In this case, \code{spike_metadata} 
+#' must have exactly four columns: \code{metadata_datum}, \code{feature_spiked}, 
+#' \code{associated_property}, and \code{effect_size}. Each row of the data.frame 
+#' configures one specific metadata-microbe association. Specifically:
+#' \itemize{
+#' \item \code{metadata_datum} (integer) indicates the column number for the metadata
+#' variable to be associated with the microbe
+#' \item \code{feature_spiked} (character) indicates the microbe name to be associated
+#' with the metadata variable
+#' \item \code{associated_property} (character, either \code{"abundance"} or 
+#' \code{"prevalence"}), indicating the property of the microbe to be modified.
+#' If you want the microbe to be associated with the metadata variable
+#' in both properties, include two rows in \code{spike_metadata}, one for 
+#' abundance and one for prevalence
+#' \item \code{effect_size} (numeric) indicating the strength of the association. 
+#' This corresponds to log fold change in non-zero abundance for
+#' \code{"abundance"} spike-in, and log odds ratio for \code{"prevalence"} 
+#' spike-in
+#' }
+#' }
+#' @param metadata_effect_size (for when \code{spike_metadata} is \code{"abundance"},
+#' \code{"prevalence"}, or \code{"both"}) effect size of the spiked-in associations. This is
+#' non-zero log fold change for abundance spike-in, and log odds ratio for prevalence spike-in
+#' @param perc_feature_spiked_metadata (for when \code{spike_metadata} is \code{"abundance"},
+#' \code{"prevalence"}, or \code{"both"})
+#' percentage of features to be associated with metadata 
 #' @param metadata_matrix the user can provide a metadata matrix to use for spiking-in
-#' of feature abundances. If using default (\code{NULL}) a single variable of balanced
-#' cases and controls will be generated
-#' @param feature_metadata_spike_df the user can provide a data frame to exactly prescribe
-#' feature-metadata associations. This data frame should have exactly the following columns:
-#' a) \code{"metadata_datum"} for which metadata to be associated with
-#' b) \code{"feature_spiked"} which features, in
-#' c) \code{"associated_property"} which property (\code{"abundance"}, \code{"prevalence"}, or \code{"both"}), at
-#' d) \code{"effect_size"} what effect size. Default to \code{NULL} in which case this
-#' data frame will be automatically generated for the user, based on \code{spike_metadata}, 
-#' \code{metadata_effect_size}, \code{perc_feature_spiked_metadata}, and \code{metadata_matrix} (if provided).
+#' of feature abundances. If using default (\code{NULL}) two variables will be generated: 
+#' one continous, and a binary one of balanced cases and controls. Note: if
+#' \code{spike_metadata} is provided as a data.frame, then the user must provide
+#' \code{metadata_matrix} too
 #' @param median_read_depth targeted median per-sample read depth 
 #' @param verbose whether detailed information should be printed
 #'
@@ -52,16 +77,17 @@
 #' }
 #' \item{spike_metadata}{
 #' list of variables provided or generated for metadata spike-in. This include 
-#' \code{spike_metadata} for the characteristic specified (\code{"abundance"},  
-#' \code{"prevalence"}, or \code{"both"}), \code{metadata_matrix} for the
+#' \code{spike_metadata} for the original \code{spike_metadata} parameter provided
+#' by the user, \code{metadata_matrix} for the
 #' metadata (either provided by the user or internally generated), and 
-#' \code{feature_metadata_spike_df} (either provided by the user or internally generated) 
+#' \code{feature_metadata_spike_df}
 #' for detailed specification of which metadata variables were used to spike-in associations
-#' with which features, in what properties at which effect sizes.
+#' with which features, in what properties at which effect sizes. This is the 
+#' same as \code{spike_metadata} if the latter was provided as a data.frame.
 #' }
 #' }
 #' @export
-#' @author Siyuan Ma, \email{siyuan.ma@pennmedicine.upenn.edu}
+#' @author Siyuan Ma, \email{syma.research@gmail.com}
 #'
 #' @examples
 #' ## Using one of the pre-trained SparseDOSSA2 templates:
@@ -74,14 +100,10 @@ SparseDOSSA2 <- function(template = "Stool",
                          n_sample = 100,
                          new_features = TRUE,
                          n_feature = 100,
-                         spike_metadata = c("none", 
-                                            "both",
-                                            "abundance",
-                                            "prevalence"),
+                         spike_metadata = "none",
                          metadata_effect_size = 1,
                          perc_feature_spiked_metadata = 0.05,
                          metadata_matrix = NULL,
-                         feature_metadata_spike_df = NULL,
                          median_read_depth = 50000,
                          verbose = TRUE) {
   if(is.character(template)) {
@@ -124,19 +146,33 @@ SparseDOSSA2 <- function(template = "Stool",
                          feature_param = feature_param,
                          Omega = Omega)
   
-  # generate spiked-in associatio with metadata
-  spike_metadata <- match.arg(spike_metadata)
-  if(spike_metadata == "none") {
+  # generate spiked-in association with metadata
+  if(!(is.character(spike_metadata) | is.data.frame(spike_metadata)))
+    stop("spike_metadata must be either character or a data.frame!")
+  if(is.character(spike_metadata)) {
+    spike_metadata <- match.arg(spike_metadata, 
+                                choices = c("none", "abundance", 
+                                            "prevalence", "both"))
+  }
+  if(identical(spike_metadata, "none")) {
     if(verbose)
       message("spike_metadata is \"none\", ",
               "no metadata association will be simulated...")
+    
     mat_spiked_metadata <- mat_null
+    feature_metadata_spike_df <- NULL
   } else {
     if(verbose)
       message("Spiking in metadata association...")
+    
+    # metadata_matrix
     if(is.null(metadata_matrix)) {
-      message("metadata_matrix is not provided; ",
-              "simulating default metadata_matrix...")
+      if(is.data.frame(spike_metadata))
+        stop("spike_metadata is provided as a data.frame. User must specify ",
+             "metadata_matrix as well!")
+      if(verbose)
+        message("metadata_matrix is not provided; ",
+                "simulating default metadata_matrix...")
       metadata_matrix <- cbind(rnorm(n = n_sample),
                                rbinom(n = n_sample,
                                       size = 1,
@@ -153,36 +189,50 @@ SparseDOSSA2 <- function(template = "Stool",
         colnames(mat_null) <- rownames(metadata_matrix)
     }
     n_metadata <- ncol(metadata_matrix)
+    
+    # metadata_effect_size
     if(length(metadata_effect_size) != 1 & 
        length(metadata_effect_size) != n_metadata)
       stop("Length of metadata_effect_size can only be either 1 or number of ",
            "columns of metadata_matrix!")
     if(length(metadata_effect_size) == 1)
       metadata_effect_size <- rep(metadata_effect_size, n_metadata)
-    if(!is.null(feature_metadata_spike_df)) {
+    
+    # feature_metadata_spike_df
+    if(is.data.frame(spike_metadata)) {
       if(verbose) {
-        message("feature_metadata_spike_df is provided; ",
+        message("spike_metadata is provided as a data.frame; ",
                 "will use for simulating metadata association ",
                 "(metadata_effect_size and perc_feature_spiked_metadata will ",
                 "be ignored)...")
       }
-      if(!is.data.frame(feature_metadata_spike_df))
-        stop("feature_metadata_spike_df must be a data frame!")
+      
+      # check format
       if(!all(c("metadata_datum",
                 "feature_spiked",
                 "associated_property",
                 "effect_size") %in%
-              colnames(feature_metadata_spike_df)))
-        stop("feature_metadata_spike_df does not follow the correct format! ",
+              colnames(spike_metadata)))
+        stop("spike_metadata does not follow the correct format! ",
              "Must have the following columns: metadata_datum, ",
              "feature_spiked, associated_property, and effect_size.")
-      if(!all(feature_metadata_spike_df$feature_spiked %in% 
+      if(!all(spike_metadata$feature_spiked %in% 
               features))
-        stop("feature_spiked in feature_metadata_spike_df must provide the ",
+        stop("feature_spiked in spike_metadata must provide the ",
              "spiked feature names!")
+      if(!all(spike_metadata$metadata_datum %in% 
+              seq(1, n_metadata)))
+        stop("metadata_datum in spike_metadata must provide the ",
+             "associated metadata column number!")
+      if(!all(spike_metadata$associated_property %in% 
+              c("prevalence", "abundance")))
+        stop("associated_property in spike_metadata must be ",
+             "either \"prevalence\" or \"abundance\"!")
+      
+      feature_metadata_spike_df <- spike_metadata
     } else {
       if(verbose)
-        message("feature_metadata_spike_df is not provided; ",
+        message("spike_metadata is specified as ", spike_metadata, "; ",
                 "generating default metadata association...")
       feature_metadata_spike_df <- 
         generate_feature_metadata_spike_df(

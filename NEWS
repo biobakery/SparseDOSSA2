@@ -1,0 +1,8 @@
+Changes in version 0.99.2 (2021-10-06)
++ Changed the spike_metadata interface in the SparseDOSSA2 function. 
+  spike_metadata can now be either character ("none" the default,
+  "abundance", "prevalence", or "both", same as before), or a data.frame
+  configuring the metadata-microbe associations (replacing the old
+  feature_metadata_spike_df parameter)
++ More detailed documentation for these parameters
++ Better checking and error reporting for metadata spike-in user errors

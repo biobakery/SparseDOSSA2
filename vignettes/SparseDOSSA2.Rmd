@@ -5,7 +5,7 @@ author:
 affiliation:
 - Harvard T.H. Chan School of Public Health
 - Broad Institute
-email: siyuan.ma@pennmedicine.upenn.edu
+email: syma.research@gmail.com
 package: SparseDOSSA2
 date: "12/01/2020"
 output:

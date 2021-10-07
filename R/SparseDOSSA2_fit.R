@@ -32,7 +32,7 @@
 #' }
 
 #' @export
-#' @author Siyuan Ma, \email{siyuan.ma@pennmedicine.upenn.edu}
+#' @author Siyuan Ma, \email{syma.research@gmail.com}
 #' @examples
 #' data("Stool_subset")
 #' fitted <- fit_SparseDOSSA2(data = Stool_subset)
@@ -153,7 +153,7 @@ control_fit <- function(maxit = 100,
 #' }
 
 #' @export
-#' @author Siyuan Ma, \email{siyuan.ma@pennmedicine.upenn.edu}
+#' @author Siyuan Ma, \email{syma.research@gmail.com}
 #' @examples
 #' data("Stool_subset")
 #' fitted <- fitCV_SparseDOSSA(data = Stool_subset,

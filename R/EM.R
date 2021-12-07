@@ -221,7 +221,7 @@ EM_CV <- function(data,
            l_logLik = l_logLik)
     })
   }
-  ll_results_CV <- future::values(ll_results_CV)
+  ll_results_CV <- future::value(ll_results_CV)
 
   # Aggregate CV results
   logLik_CV <-

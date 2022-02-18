@@ -135,3 +135,6 @@ loaded via a namespace (and not attached):
 [37] stringi_1.5.3       RCurl_1.98-1.2     
 ```
 
+# Contributions
+Thanks go to these wonderful people:
+

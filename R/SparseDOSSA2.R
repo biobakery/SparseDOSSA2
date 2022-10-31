@@ -124,6 +124,10 @@ SparseDOSSA2 <- function(template = "Stool",
     n_feature <- nrow(feature_param_template)
     feature_param <- feature_param_template
     Omega <- template$EM_fit$fit$Omega
+    # check that Omega and Sigma should agree
+    if(max(abs(Omega %*% template$EM_fit$fit$Sigma - 
+               diag(rep(1, length(template$EM_fit$fit$pi0)))) > 1e-10)
+       stop("Omega shoud be the inverse of Sigma!")
   } else {
     if(verbose) 
       message("new_features is TRUE, ",

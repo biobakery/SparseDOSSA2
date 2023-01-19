@@ -126,7 +126,7 @@ SparseDOSSA2 <- function(template = "Stool",
     Omega <- template$EM_fit$fit$Omega
     # check that Omega and Sigma should agree
     if(max(abs(Omega %*% template$EM_fit$fit$Sigma - 
-               diag(rep(1, length(template$EM_fit$fit$pi0)))) > 1e-10)
+               diag(rep(1, length(template$EM_fit$fit$pi0))))) > 1e-10)
        stop("Omega shoud be the inverse of Sigma!")
   } else {
     if(verbose) 

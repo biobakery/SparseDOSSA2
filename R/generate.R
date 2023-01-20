@@ -23,7 +23,7 @@ generate_a <- function(n,
     
     ind_nonzero <- apply(samples_a > 0, 2, any) ## FIXME??
     if(sum(ind_nonzero) >= n) {
-      samples_a <- samples_a[, ind_nonzero][, seq_len(n)]
+      samples_a <- samples_a[, ind_nonzero, drop = FALSE][, seq_len(n), drop = FALSE]
       colnames(samples_a) <- paste0("Sample", seq_len(n))
       return(samples_a)
     }
@@ -45,6 +45,13 @@ rcopulasso <- function(n, pi0, mu, sigma, Omega) {
                          mu = mu[i],
                          sigma = sigma[i]),
            rep(0.0, n))
+
+  if (n == 1) {
+    # The remaining rank setting stuff isn't necessary with n = 1
+    mat_amarginals <- matrix(mat_amarginals, nrow = 1)
+    return(mat_amarginals)
+  }
+
   # arrange from smallest to largest for shuffling
   mat_amarginals <- 
     apply(mat_amarginals, 2, function(x) x[order(x)])

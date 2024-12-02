@@ -182,8 +182,12 @@ generate_depth <- function(mu_depth,
 generate_count <- function(rel, depth) {
   mat_count <- 
     vapply(seq_along(depth), 
-           function(i_sample) 
-             rmultinom(n = 1, size = depth[i_sample], prob = rel[, i_sample]),
+           function(i_sample) {
+             if(all(rel[, i_sample] == 0))
+               return(rep(0, nrow(rel)))
+             else
+               rmultinom(n = 1, size = depth[i_sample], prob = rel[, i_sample])
+           },
            rep(0, nrow(rel)))
   dimnames(mat_count) <- dimnames(rel)
   return(mat_count)
